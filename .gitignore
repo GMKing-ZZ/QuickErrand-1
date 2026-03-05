@@ -39,7 +39,7 @@ Thumbs.db
 .env.production.local
 
 # Uploads
-uploads/
+# uploads/ - 已启用上传文件夹追踪
 
 # Test coverage
 coverage/
