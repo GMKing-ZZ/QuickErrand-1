@@ -1,0 +1,436 @@
+<template>
+  <view class="conversations-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <view class="nav-title-wrapper">
+        <view class="avatar-small">
+          <image
+            v-if="contactAvatar"
+            class="avatar-small-img"
+            :src="contactAvatar"
+            mode="aspectFill"
+          />
+          <view v-else class="avatar-small-placeholder">
+            <text class="avatar-small-text">{{ (contactNickname || '聊').charAt(0) }}</text>
+          </view>
+        </view>
+        <text class="nav-title">{{ contactNickname || '聊天' }}</text>
+      </view>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 加载中 -->
+    <view v-if="loading" class="loading-wrapper">
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <!-- 空状态 -->
+    <view v-else-if="conversations.length === 0" class="empty-wrapper">
+      <text class="empty-icon">📦</text>
+      <text class="empty-text">暂无订单聊天</text>
+    </view>
+
+    <!-- 订单会话列表 -->
+    <scroll-view v-else class="list-scroll" scroll-y enable-back-to-top>
+      <view
+        v-for="item in conversations"
+        :key="item.orderId"
+        class="order-item"
+        @click="openChatSession(item)"
+      >
+        <view class="order-info">
+          <view class="order-header">
+            <text class="order-no">订单号: {{ item.orderNo }}</text>
+            <text class="order-status" :class="getStatusClass(item.orderStatus)">
+              {{ getStatusText(item.orderStatus) }}
+            </text>
+          </view>
+          <text class="order-title" v-if="item.orderTitle">{{ item.orderTitle }}</text>
+          <view class="order-footer">
+            <text class="last-msg" :class="{ 'last-msg-empty': !item.lastContent }">
+              {{ formatLastContent(item.lastContent) }}
+            </text>
+            <text class="time-text" v-if="item.lastTime">{{ formatTime(item.lastTime) }}</text>
+          </view>
+        </view>
+        <view v-if="item.unreadCount > 0" class="unread-badge">
+          <text class="unread-text">
+            {{ item.unreadCount > 99 ? '99+' : String(item.unreadCount) }}
+          </text>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+
+<script>
+import type { ChatOrderConversation } from '@/common/api/chat.uts'
+import { getContactOrderConversations } from '@/common/api/chat.uts'
+
+export default {
+  data() {
+    return {
+      loading: true,
+      contactId: 0 as number,
+      contactNickname: '' as string,
+      contactAvatar: '' as string,
+      conversations: [] as ChatOrderConversation[]
+    }
+  },
+  onLoad(options: any) {
+    if (options && options.contactId) {
+      this.contactId = Number(options.contactId)
+    }
+    if (options && options.nickname) {
+      this.contactNickname = decodeURIComponent(options.nickname)
+    }
+    if (options && options.avatar) {
+      this.contactAvatar = decodeURIComponent(options.avatar)
+    }
+    this.loadConversations()
+  },
+  onShow() {
+    this.loadConversations()
+  },
+  methods: {
+    goBack() {
+      uni.navigateBack()
+    },
+
+    async loadConversations() {
+      if (!this.contactId) return
+      this.loading = true
+      try {
+        const list = await getContactOrderConversations(this.contactId)
+        this.conversations = list || []
+      } catch (error) {
+        console.error('获取订单聊天列表失败:', error)
+        uni.showToast({
+          title: '加载失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    openChatSession(item: ChatOrderConversation) {
+      if (!item || !item.orderId) return
+      uni.navigateTo({
+        url: `/subpkg/chat-session?orderId=${item.orderId}`
+      })
+    },
+
+    getStatusClass(status: number): string {
+      switch (status) {
+        case 1: return 'status-pending'
+        case 2: return 'status-waiting'
+        case 3: return 'status-serving'
+        case 4: return 'status-completed'
+        case 5: return 'status-cancelled'
+        default: return ''
+      }
+    },
+
+    getStatusText(status: number): string {
+      switch (status) {
+        case 1: return '待支付'
+        case 2: return '待接单'
+        case 3: return '服务中'
+        case 4: return '已完成'
+        case 5: return '已取消'
+        default: return '未知'
+      }
+    },
+
+    formatTime(ts: number): string {
+      if (!ts) return ''
+      const time = new Date(ts)
+      const now = new Date()
+      const diff = now.getTime() - time.getTime()
+
+      if (diff < 60000) {
+        return '刚刚'
+      }
+      if (diff < 3600000) {
+        return Math.floor(diff / 60000) + '分钟前'
+      }
+
+      const todayStr = now.toDateString()
+      const timeStr = time.toDateString()
+      if (timeStr === todayStr) {
+        const h = time.getHours()
+        const m = String(time.getMinutes()).padStart(2, '0')
+        return `${h}:${m}`
+      }
+
+      const yesterday = new Date(now)
+      yesterday.setDate(yesterday.getDate() - 1)
+      if (timeStr === yesterday.toDateString()) {
+        const h = time.getHours()
+        const m = String(time.getMinutes()).padStart(2, '0')
+        return `昨天 ${h}:${m}`
+      }
+
+      const month = time.getMonth() + 1
+      const date = time.getDate()
+      return `${month}-${date}`
+    },
+
+    formatLastContent(content: string): string {
+      if (!content) return '暂无聊天记录'
+      if (this.isImageUrl(content)) return '[图片]'
+      if (content.length > 30) return content.substring(0, 30) + '...'
+      return content
+    },
+
+    isImageUrl(url: string): boolean {
+      if (!url) return false
+      const lower = url.toLowerCase()
+      return lower.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i) !== null ||
+             lower.includes('/image') ||
+             lower.includes('/images') ||
+             lower.includes('/upload')
+    }
+  }
+}
+</script>
+
+<style scoped>
+.conversations-container {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.navbar {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  padding-top: calc(60rpx + env(safe-area-inset-top));
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+}
+
+.nav-title-wrapper {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.avatar-small {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 24rpx;
+  margin-right: 12rpx;
+  overflow: hidden;
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-small-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 24rpx;
+}
+
+.avatar-small-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-small-text {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.nav-title {
+  font-size: 34rpx;
+  font-weight: bold;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.placeholder {
+  width: 64rpx;
+}
+
+.loading-wrapper {
+  padding: 200rpx 0;
+  display: flex;
+  justify-content: center;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+.empty-wrapper {
+  padding: 200rpx 40rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+}
+
+.empty-text {
+  font-size: 30rpx;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.list-scroll {
+  padding: 16rpx 20rpx;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 30rpx);
+  box-sizing: border-box;
+}
+
+.order-item {
+  flex-direction: row;
+  display: flex;
+  padding: 20rpx 16rpx;
+  margin-bottom: 16rpx;
+  background: #ffffff;
+  border-radius: 18rpx;
+  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.06);
+  align-items: center;
+}
+
+.order-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.order-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8rpx;
+}
+
+.order-no {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.order-status {
+  font-size: 22rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+}
+
+.status-pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.status-waiting {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.status-serving {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.status-completed {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.status-cancelled {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.order-title {
+  font-size: 28rpx;
+  color: #111827;
+  font-weight: 500;
+  margin-bottom: 8rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-footer {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.last-msg {
+  flex: 1;
+  font-size: 26rpx;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 12rpx;
+}
+
+.last-msg-empty {
+  color: #9ca3af;
+}
+
+.time-text {
+  font-size: 22rpx;
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.unread-badge {
+  min-width: 32rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 12rpx;
+}
+
+.unread-text {
+  font-size: 22rpx;
+  color: #ffffff;
+}
+</style>

@@ -1,0 +1,327 @@
+{
+	"leftWindow": {
+		"path": "windows/left-window.uvue",
+		"style": {
+			"width": "350px"
+		}
+	},
+	"topWindow": {
+		"path": "windows/top-window.uvue",
+		"style": {
+			"height": "60px"
+		}
+	},
+	"pages": [
+		{
+			"path": "pages/home/index",
+			"style": {
+				"navigationBarTitleText": "跑腿"
+			}
+		},
+		{
+			"path": "pages/order/list",
+			"style": {
+				"navigationBarTitleText": "我的订单"
+			}
+		},
+		{
+			"path": "pages/service/index",
+			"style": {
+				"navigationBarTitleText": "服务"
+			}
+		},
+		{
+			"path": "pages/mine/mine",
+			"style": {
+				"navigationBarTitleText": "我的"
+			}
+		},
+		{
+			"path": "pages/common/privacy",
+			"style": {
+				"navigationBarTitleText": "隐私政策"
+			}
+		},
+		{
+			"path": "pages/common/user-agreement",
+			"style": {
+				"navigationBarTitleText": "用户协议"
+			}
+		},
+		{
+			"path": "pages/common/webview",
+			"style": {
+				"navigationBarTitleText": ""
+			}
+		}
+	],
+	"subPackages": [
+		{
+			"root": "subpkg",
+			"pages": [
+				{
+					"path": "login",
+					"style": {
+						"navigationBarTitleText": "登录"
+					}
+				},
+				{
+					"path": "register-type",
+					"style": {
+						"navigationBarTitleText": "选择注册类型"
+					}
+				},
+				{
+					"path": "register",
+					"style": {
+						"navigationBarTitleText": "注册"
+					}
+				},
+				{
+					"path": "order-create",
+					"style": {
+						"navigationBarTitleText": "发布订单"
+					}
+				},
+				{
+					"path": "order-detail",
+					"style": {
+						"navigationBarTitleText": "订单详情"
+					}
+				},
+				{
+					"path": "order-evaluate",
+					"style": {
+						"navigationBarTitleText": "订单评价"
+					}
+				},
+				{
+					"path": "runner-profile",
+					"style": {
+						"navigationBarTitleText": "跑腿员信息"
+					}
+				},
+				{
+					"path": "change-password",
+					"style": {
+						"navigationBarTitleText": "修改密码"
+					}
+				},
+				{
+					"path": "forgot-password",
+					"style": {
+						"navigationBarTitleText": "忘记密码"
+					}
+				},
+				{
+					"path": "edit-profile",
+					"style": {
+						"navigationBarTitleText": "编辑资料"
+					}
+				},
+				{
+					"path": "my-reviews",
+					"style": {
+						"navigationBarTitleText": "我的评价",
+						"enablePullDownRefresh": true
+					}
+				},
+				{
+					"path": "address-list",
+					"style": {
+						"navigationBarTitleText": "地址管理"
+					}
+				},
+				{
+					"path": "address-edit",
+					"style": {
+						"navigationBarTitleText": "编辑地址"
+					}
+				},
+				{
+					"path": "map-choose",
+					"style": {
+						"navigationBarTitleText": "选择位置"
+					}
+				},
+				{
+					"path": "message-list",
+					"style": {
+						"navigationBarTitleText": "消息"
+					}
+				},
+				{
+					"path": "chat-list",
+					"style": {
+						"navigationBarTitleText": "聊天消息"
+					}
+				},
+				{
+					"path": "chat-session",
+					"style": {
+						"navigationBarTitleText": "会话",
+						"enablePullDownRefresh": false
+					}
+				},
+				{
+					"path": "contact-conversations",
+					"style": {
+						"navigationBarTitleText": "订单聊天"
+					}
+				}
+			]
+		},
+		{
+			"root": "pages/runner",
+			"pages": [
+				{
+					"path": "home",
+					"style": {
+						"navigationBarTitleText": "跑腿员首页"
+					}
+				},
+				{
+					"path": "profile",
+					"style": {
+						"navigationBarTitleText": "跑腿员中心"
+					}
+				},
+				{
+					"path": "edit-profile",
+					"style": {
+						"navigationBarTitleText": "编辑资料"
+					}
+				},
+				{
+					"path": "auth-apply",
+					"style": {
+						"navigationBarTitleText": "跑腿员认证"
+					}
+				},
+				{
+					"path": "auth-status",
+					"style": {
+						"navigationBarTitleText": "认证状态"
+					}
+				},
+				{
+					"path": "earnings-details",
+					"style": {
+						"navigationBarTitleText": "收益明细"
+					}
+				},
+				{
+					"path": "earnings",
+					"style": {
+						"navigationBarTitleText": "我的收益"
+					}
+				},
+				{
+					"path": "pending-orders",
+					"style": {
+						"navigationBarTitleText": "待接订单"
+					}
+				},
+				{
+					"path": "active-orders",
+					"style": {
+						"navigationBarTitleText": "进行中订单"
+					}
+				},
+				{
+					"path": "confirm-receive",
+					"style": {
+						"navigationBarTitleText": "确认收货"
+					}
+				},
+				{
+					"path": "withdrawal-records",
+					"style": {
+						"navigationBarTitleText": "提现记录"
+					}
+				},
+				{
+					"path": "withdrawal",
+					"style": {
+						"navigationBarTitleText": "提现"
+					}
+				},
+				{
+					"path": "my-reviews",
+					"style": {
+						"navigationBarTitleText": "用户评价",
+						"enablePullDownRefresh": true
+					}
+				}
+			]
+		},
+		{
+			"root": "uni_modules/uni-pay-x/pages",
+			"pages": [
+				{
+					"path": "success/success",
+					"style": {
+						"navigationBarTitleText": "",
+						"backgroundColor": "#F8F8F8",
+						"navigationBarBackgroundColor": "#007aff",
+						"navigationBarTextStyle": "white"
+					}
+				}
+			]
+		}
+	],
+	"optimization": {
+		"subPackages": true
+	},
+	"tabBar": {
+		"color": "#999999",
+		"selectedColor": "#007aff",
+		"backgroundColor": "#ffffff",
+		"borderStyle": "black",
+		"list": [
+			{
+				"pagePath": "pages/home/index",
+				"text": "首页",
+				"iconPath": "static/shouye.png",
+				"selectedIconPath": "static/shouye-selected.png"
+			},
+			{
+				"pagePath": "pages/service/index",
+				"text": "服务",
+				"iconPath": "static/fuwu.png",
+				"selectedIconPath": "static/fuwu-selected.png"
+			},
+			{
+				"pagePath": "pages/order/list",
+				"text": "订单",
+				"iconPath": "static/dingdan.png",
+				"selectedIconPath": "static/dingdan-selected.png"
+			},
+			{
+				"pagePath": "pages/mine/mine",
+				"text": "我的",
+				"iconPath": "static/wode.png",
+				"selectedIconPath": "static/wode-selected.png"
+			}
+		]
+	},
+	"globalStyle": {
+		"pageOrientation": "portrait",
+		"navigationBarTitleText": "跑腿小程序",
+		"navigationBarTextStyle": "@navigationBarTextStyle",
+		"navigationBarBackgroundColor": "@navigationBarBackgroundColor",
+		"backgroundColorContent": "@backgroundColorContent",
+		"backgroundColor": "@backgroundColor",
+		"backgroundTextStyle": "@backgroundTextStyle"
+	},
+	"condition": {
+		"current": 0,
+		"list": [
+			{
+				"name": "跑腿首页",
+				"path": "pages/home/index",
+				"query": ""
+			}
+		]
+	}
+}

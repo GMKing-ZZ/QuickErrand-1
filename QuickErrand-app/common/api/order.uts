@@ -1,0 +1,173 @@
+/**
+ * 订单相关API
+ */
+import { post, get } from '../utils/request.uts'
+
+/**
+ * 订单类型信息
+ */
+export type OrderTypeInfo = {
+  id : number
+  typeName : string
+  icon : string | null
+  description : string | null
+  basePrice : number | null
+  pricePerKm : number | null
+  sort : number | null
+  status : number | null
+}
+
+/**
+ * 订单信息
+ */
+export type OrderInfo = {
+  id : number
+  orderNo : string
+  userId : number
+  orderTypeId : number
+  orderTypeName ?: string
+  pickupAddressId : number
+  deliveryAddressId : number
+  pickupContact : string
+  pickupPhone : string
+  pickupAddress : string
+  deliveryContact : string
+  deliveryPhone : string
+  deliveryAddress : string
+  distance ?: number
+  itemDescription ?: string
+  itemImages ?: string
+  /** 跑腿员收益（配送费） */
+  runnerFee ?: number
+  /** 平台收益（平台服务费） */
+  platformFee ?: number
+  amount : number
+  remark ?: string
+  pickupCode : string
+  status : number
+  statusText ?: string
+  runnerId ?: number
+  runnerName ?: string
+  runnerPhone ?: string
+  paymentMethod : number
+  paymentTime ?: string
+  transactionId ?: string
+  createTime : string
+  // 评价相关（后端扩展字段）
+  evaluated ?: boolean
+  serviceScore ?: number
+  attitudeScore ?: number
+  evaluationContent ?: string
+  evaluationImages ?: string
+}
+
+/**
+ * 计算费用参数
+ */
+export type CalculateFeeParams = {
+  orderTypeId : number
+  distance : number
+}
+
+/**
+ * 创建订单参数
+ */
+export type CreateOrderParams = {
+  orderTypeId : number
+  pickupAddressId : number
+  deliveryAddressId : number
+  pickupContact : string
+  pickupPhone : string
+  pickupAddress : string
+  pickupLongitude ?: string
+  pickupLatitude ?: string
+  deliveryContact : string
+  deliveryPhone : string
+  deliveryAddress : string
+  deliveryLongitude ?: string
+  deliveryLatitude ?: string
+  distance ?: number
+  itemDescription ?: string
+  itemImages ?: string
+  customAmount ?: number
+  remark ?: string
+  paymentMethod : number
+  enablePickupCode ?: boolean
+}
+
+/**
+ * 获取订单类型列表
+ */
+export const getOrderTypes = () : Promise<OrderTypeInfo[]> => {
+  return get<OrderTypeInfo[]>('/order/types')
+}
+
+/**
+ * 计算订单费用
+ */
+export const calculateFee = (data : CalculateFeeParams) : Promise<number> => {
+  return post<number>('/order/calculateFee', data)
+}
+
+/**
+ * 创建订单
+ */
+export const createOrder = (data : CreateOrderParams) : Promise<number> => {
+  return post<number>('/order/create', data)
+}
+
+/**
+ * 支付订单
+ */
+export const payOrder = (orderId : number) : Promise<any> => {
+  return post<any>(`/order/pay/${orderId}`, {})
+}
+
+/**
+ * 获取订单详情
+ */
+export const getOrderDetail = (orderId : number) : Promise<OrderInfo> => {
+  return get<OrderInfo>(`/order/${orderId}`)
+}
+
+/**
+ * 获取订单列表
+ */
+export const getOrderList = (status ?: number) : Promise<OrderInfo[]> => {
+  // 如果 status 为 null 或 undefined，则不传递该参数，避免后端接收到字符串 "null"
+  const params = status !== null && status !== undefined ? { status } : {}
+  return get<OrderInfo[]>('/order/list', params)
+}
+
+/**
+ * 取消订单
+ */
+export const cancelOrder = (orderId : number, reason : string) : Promise<any> => {
+  return post('/order/cancel', { orderId, reason })
+}
+
+/**
+ * 搜索订单
+ */
+export const searchOrders = (keyword : string) : Promise<OrderInfo[]> => {
+  return get<OrderInfo[]>('/order/search', { keyword })
+}
+
+/**
+ * 评价订单参数
+ */
+export type EvaluateOrderParams = {
+  orderId : number
+  serviceScore : number
+  attitudeScore : number
+  content ?: string
+  tags ?: string
+  images ?: string
+}
+
+/**
+ * 评价订单
+ */
+export const evaluateOrder = (data : EvaluateOrderParams) : Promise<any> => {
+  return post('/order/evaluate', data)
+}

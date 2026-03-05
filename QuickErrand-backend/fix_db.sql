@@ -1,0 +1,2 @@
+ALTER TABLE t_user ADD COLUMN pickup_code_enabled INT DEFAULT 1;
+ALTER TABLE t_order MODIFY COLUMN pickup_code VARCHAR(10) DEFAULT NULL;

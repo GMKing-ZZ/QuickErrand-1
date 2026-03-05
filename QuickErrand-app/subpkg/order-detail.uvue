@@ -1,0 +1,1652 @@
+<template>
+  <view class="order-detail-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="nav-title">订单详情</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 可滚动内容区域 -->
+    <scroll-view class="content-scroll" scroll-y enable-back-to-top>
+      <!-- 订单状态 -->
+      <view class="status-section">
+        <view class="status-row">
+          <text class="status-badge" :class="'s' + orderInfo.status">
+            {{ orderInfo.statusText || getStatusText(orderInfo.status) }}
+          </text>
+          <text class="status-amount">¥{{ formatMoney(orderInfo.amount) }}</text>
+        </view>
+        <!-- 费用明细：配送费 + 平台服务费 -->
+        <view class="fee-row">
+          <text class="fee-item">
+            配送费：
+            <text class="fee-amount">¥{{ formatMoney(orderInfo.runnerFee ?? 0) }}</text>
+          </text>
+          <text class="fee-item">
+            平台服务费：
+            <text class="fee-amount">¥{{ formatMoney(orderInfo.platformFee ?? 0) }}</text>
+          </text>
+        </view>
+        <text class="status-sub">{{ orderInfo.orderNo }}</text>
+        <text class="status-tip">{{ getStatusTip() }}</text>
+        
+        <!-- 订单进度条（已取消状态不显示） -->
+        <view v-if="orderInfo.status !== 5" class="progress-bar">
+          <view class="progress-container">
+            <view class="progress-track">
+              <view class="progress-fill" :style="{ width: getProgressWidth() }"></view>
+            </view>
+            <view class="progress-nodes">
+              <view 
+                v-for="(step, index) in progressSteps" 
+                :key="index"
+                class="progress-node"
+                :class="{ active: isStepActive(index), current: isStepCurrent(index) }"
+              >
+                <view class="node-dot">
+                  <text v-if="isStepActive(index)" class="node-check">✓</text>
+                </view>
+                <text class="node-label">{{ step.label }}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 收货码（仅订单创建者可见） -->
+      <view v-if="shouldShowPickupCode" class="pickup-code-section">
+        <view class="code-card">
+          <text class="code-label">收货码</text>
+          <text class="code-value">{{ orderInfo.pickupCode }}</text>
+          <text class="code-tip">请将此码告知跑腿员以完成订单</text>
+        </view>
+      </view>
+
+      <!-- 地址信息（优先展示“去哪儿”） -->
+      <view class="address-section">
+        <view class="section-title">
+          <text class="title-icon">📍</text>
+          <text class="title-text">地址信息</text>
+        </view>
+        <view class="address-card">
+          <view class="address-item">
+            <view class="address-label">
+              <text class="label-icon">🔵</text>
+              <text class="label-text">取件地址</text>
+            </view>
+            <view class="address-content">
+              <text class="address-line">
+                取件人：<text class="address-line-value">{{ orderInfo.pickupContact }}</text>
+              </text>
+              <text class="address-line">
+                取件联系：<text class="address-line-value">{{ orderInfo.pickupPhone }}</text>
+              </text>
+              <text class="address-line">
+                取件地址：<text class="address-line-value">{{ orderInfo.pickupAddress }}</text>
+              </text>
+            </view>
+          </view>
+          <view class="address-divider"></view>
+          <view class="address-item">
+            <view class="address-label">
+              <text class="label-icon">🔴</text>
+              <text class="label-text">送达地址</text>
+            </view>
+            <view class="address-content">
+              <text class="address-line">
+                收件人：<text class="address-line-value">{{ orderInfo.deliveryContact }}</text>
+              </text>
+              <text class="address-line">
+                联系电话：<text class="address-line-value">{{ orderInfo.deliveryPhone }}</text>
+              </text>
+              <text class="address-line">
+                送达地址：<text class="address-line-value">{{ orderInfo.deliveryAddress }}</text>
+              </text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 物品信息（描述/图片） -->
+      <view v-if="orderInfo.itemDescription || imageList.length" class="item-section">
+        <view class="section-title">
+          <text class="title-icon">🧾</text>
+          <text class="title-text">物品信息</text>
+        </view>
+        <view class="item-card">
+          <text v-if="orderInfo.itemDescription" class="item-desc">{{ orderInfo.itemDescription }}</text>
+
+          <scroll-view v-if="imageList.length" class="image-scroll" scroll-x>
+            <view class="image-row">
+              <image
+                v-for="(url, idx) in imageList"
+                :key="idx"
+                class="item-image"
+                :src="url"
+                mode="aspectFill"
+                @click="previewImages(idx)"
+              />
+            </view>
+          </scroll-view>
+        </view>
+      </view>
+
+      <!-- 跑腿员信息 -->
+      <view v-if="orderInfo.runnerId" class="runner-section">
+        <view class="section-title">
+          <text class="title-icon">👤</text>
+          <text class="title-text">跑腿员信息</text>
+        </view>
+        <view class="runner-card" @click="goRunnerProfile">
+          <text class="info-line">
+            跑腿员姓名：<text class="info-line-value">{{ orderInfo.runnerName }}</text>
+          </text>
+          <text class="info-line">
+            联系电话：<text class="info-line-value">{{ orderInfo.runnerPhone }}</text>
+          </text>
+          <view class="runner-card-hint">
+            <text class="hint-text">点击查看跑腿员详情</text>
+            <text class="hint-arrow">›</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 订单信息（含费用） -->
+      <view class="order-info-section">
+        <view class="section-title">
+          <text class="title-icon">📋</text>
+          <text class="title-text">订单信息</text>
+        </view>
+        <view class="info-card">
+          <text class="info-line">
+            订单编号：<text class="info-line-value">{{ orderInfo.orderNo }}</text>
+          </text>
+          <text class="info-line">
+            订单类型：<text class="info-line-value">{{ orderInfo.orderTypeName }}</text>
+          </text>
+          <text class="info-line">
+            下单时间：<text class="info-line-value">{{ formatTime(orderInfo.createTime) }}</text>
+          </text>
+          <text v-if="orderInfo.paymentTime" class="info-line">
+            支付时间：<text class="info-line-value">{{ formatTime(orderInfo.paymentTime) }}</text>
+          </text>
+          <text class="info-line">
+            配送距离：<text class="info-line-value">{{ formatDistance(orderInfo.distance) }} km</text>
+          </text>
+          <text class="info-line">
+            支付方式：<text class="info-line-value">{{ getPaymentMethodText() }}</text>
+          </text>
+          <text class="info-line">
+            配送费：
+            <text class="info-line-value">¥{{ formatMoney(orderInfo.runnerFee ?? 0) }}</text>
+          </text>
+          <text class="info-line">
+            平台服务费：
+            <text class="info-line-value">¥{{ formatMoney(orderInfo.platformFee ?? 0) }}</text>
+          </text>
+          <text class="info-line info-line-amount">
+            实付金额：<text class="info-line-amount-value">¥{{ formatMoney(orderInfo.amount) }}</text>
+          </text>
+        </view>
+      </view>
+
+      <!-- 评价信息（如已评价） -->
+      <view v-if="orderInfo.evaluated" class="evaluation-section">
+        <view class="section-title">
+          <text class="title-icon">💬</text>
+          <text class="title-text">订单评价</text>
+        </view>
+        <view class="evaluation-card">
+          <!-- 星级横向展示，两行：服务质量 / 服务态度 -->
+          <view class="eval-star-rows">
+            <view class="eval-star-row">
+              <text class="eval-star-label">服务质量</text>
+              <view class="eval-star-list">
+                <text
+                  v-for="n in 5"
+                  :key="`service-${n}`"
+                  class="eval-star"
+                  :class="{ active: n <= (orderInfo.serviceScore || 0) }"
+                >
+                  ★
+                </text>
+              </view>
+              <text class="eval-star-score">{{ orderInfo.serviceScore || 0 }}分</text>
+            </view>
+            <view class="eval-star-row" v-if="orderInfo.attitudeScore !== undefined && orderInfo.attitudeScore !== null">
+              <text class="eval-star-label">服务态度</text>
+              <view class="eval-star-list">
+                <text
+                  v-for="n in 5"
+                  :key="`attitude-${n}`"
+                  class="eval-star"
+                  :class="{ active: n <= (orderInfo.attitudeScore || 0) }"
+                >
+                  ★
+                </text>
+              </view>
+              <text class="eval-star-score">{{ orderInfo.attitudeScore || 0 }}分</text>
+            </view>
+          </view>
+
+          <!-- 评价内容 -->
+          <text class="evaluation-content">
+            {{ orderInfo.evaluationContent || '用户未填写具体评价内容' }}
+          </text>
+
+          <!-- 评价图片（如有） -->
+          <scroll-view
+            v-if="evaluationImageList.length"
+            class="evaluation-image-scroll"
+            scroll-x
+          >
+            <view class="evaluation-image-row">
+              <image
+                v-for="(url, idx) in evaluationImageList"
+                :key="idx"
+                class="evaluation-image"
+                :src="url"
+                mode="aspectFill"
+                @click="previewEvaluationImages(idx)"
+              />
+            </view>
+          </scroll-view>
+        </view>
+      </view>
+
+      <!-- 备注信息 -->
+      <view v-if="orderInfo.remark" class="remark-section">
+        <view class="section-title">
+          <text class="title-icon">📝</text>
+          <text class="title-text">备注信息</text>
+        </view>
+        <view class="remark-card">
+          <text class="remark-text">{{ orderInfo.remark }}</text>
+        </view>
+      </view>
+    </scroll-view>
+
+    <!-- 底部操作按钮 -->
+    <view v-if="showActionButtons || showContactRunnerButton" class="action-section">
+      <!-- 下单用户的按钮：支付和取消 -->
+      <template v-if="!isRunner">
+        <button
+          v-if="orderInfo.status === 1"
+          class="action-btn pay-btn"
+          @click="handlePay"
+        >
+          <text class="btn-text">立即支付</text>
+        </button>
+        <button
+          v-if="orderInfo.status === 4 && isOrderOwner && !orderInfo.evaluated"
+          class="action-btn contact-runner-btn"
+          @click="goEvaluateFromDetail"
+        >
+          <text class="btn-text">评价订单</text>
+        </button>
+        <button
+          v-if="(orderInfo.status === 1 || orderInfo.status === 2) && isOrderOwner"
+          class="action-btn cancel-btn"
+          @click="handleCancel"
+        >
+          <text class="btn-text">取消订单</text>
+        </button>
+        <!-- 联系跑腿员按钮（仅订单所有者且订单已接单时显示） -->
+        <button
+          v-if="showContactRunnerButton"
+          class="action-btn contact-runner-btn"
+          @click="handleContactRunner"
+        >
+          <text class="btn-text">联系跑腿员</text>
+        </button>
+      </template>
+      <!-- 跑腿员的按钮：立即接单 / 确认收货 -->
+      <template v-else>
+        <button
+          v-if="orderInfo.status === 2"
+          class="action-btn accept-btn"
+          @click="handleAcceptOrder"
+        >
+          <text class="btn-text">立即接单</text>
+        </button>
+        <button
+          v-if="orderInfo.status === 3 && isOrderRunner"
+          class="action-btn confirm-receive-btn"
+          @click="goConfirmReceive"
+        >
+          <text class="btn-text">确认收货</text>
+        </button>
+      </template>
+    </view>
+
+    <!-- 联系方式选择弹窗 -->
+    <view v-if="showContactModal" class="modal-mask" @click="closeContactModal">
+      <view class="modal-content" @click.stop>
+        <view class="modal-header">
+          <text class="modal-title">选择联系方式</text>
+          <view class="modal-close" @click="closeContactModal">
+            <text class="close-icon">×</text>
+          </view>
+        </view>
+        <view class="modal-body">
+          <view class="contact-option" @click="handleOnlineContact">
+            <text class="option-icon">💬</text>
+            <text class="option-text">在线联系（推荐）</text>
+            <text class="option-arrow">›</text>
+          </view>
+          <view class="contact-option" @click="handlePhoneContact">
+            <text class="option-icon">📞</text>
+            <text class="option-text">电话联系</text>
+            <text class="option-arrow">›</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 电话号码弹窗 -->
+    <view v-if="showPhoneModal" class="modal-mask" @click="closePhoneModal">
+      <view class="modal-content phone-modal-content" @click.stop>
+        <view class="modal-header">
+          <text class="modal-title">跑腿员电话</text>
+          <view class="modal-close" @click="closePhoneModal">
+            <text class="close-icon">×</text>
+          </view>
+        </view>
+        <view class="modal-body">
+          <text class="phone-number">{{ orderInfo.runnerPhone }}</text>
+          <button class="call-btn" @click="callRunner">
+            <text class="call-btn-text">拨打</text>
+          </button>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getOrderDetail, payOrder, cancelOrder } from '@/common/api/order.uts'
+import type { OrderInfo } from '@/common/api/order.uts'
+import { userState, checkIsRunner } from '@/store/user.uts'
+import { acceptOrder, getRunnerAuthInfo } from '@/common/api/runner.uts'
+
+export default {
+  data() {
+    return {
+      orderId: 0,
+      loading: false,
+      showContactModal: false,
+      showPhoneModal: false,
+      orderInfo: {
+        id: 0,
+        orderNo: '',
+        userId: 0,
+        orderTypeId: 0,
+        orderTypeName: '',
+        pickupAddressId: 0,
+        deliveryAddressId: 0,
+        pickupContact: '',
+        pickupPhone: '',
+        pickupAddress: '',
+        deliveryContact: '',
+        deliveryPhone: '',
+        deliveryAddress: '',
+        distance: 0,
+        amount: 0,
+        itemDescription: '',
+        itemImages: '',
+        remark: '',
+        pickupCode: '',
+        status: 0,
+        statusText: '',
+        runnerId: 0,
+        runnerName: '',
+        runnerPhone: '',
+        paymentMethod: 1,
+        paymentTime: '',
+        transactionId: '',
+        createTime: ''
+      } as OrderInfo
+    }
+  },
+  computed: {
+    imageList(): string[] {
+      const raw: any = (this.orderInfo as any).itemImages
+      if (!raw) return []
+      if (Array.isArray(raw)) return raw.filter(Boolean)
+      const s = String(raw).trim()
+      if (!s) return []
+      try {
+        const parsed = JSON.parse(s)
+        if (Array.isArray(parsed)) {
+          return parsed.map(v => String(v)).filter(v => !!v && v !== 'null' && v !== 'undefined')
+        }
+      } catch (e) {
+        // ignore
+      }
+      // 兼容逗号分隔
+      return s
+        .split(',')
+        .map(v => v.trim())
+        .filter(v => !!v && v !== 'null' && v !== 'undefined')
+    },
+    // 评价图片列表（从 orderInfo.evaluationImages 解析）
+    evaluationImageList(): string[] {
+      const raw: any = (this.orderInfo as any).evaluationImages
+      if (!raw) return []
+      if (Array.isArray(raw)) return raw.filter(Boolean)
+      const s = String(raw).trim()
+      if (!s) return []
+      try {
+        const parsed = JSON.parse(s)
+        if (Array.isArray(parsed)) {
+          return parsed.map(v => String(v)).filter(v => !!v && v !== 'null' && v !== 'undefined')
+        }
+      } catch (e) {
+        // ignore
+      }
+      // 兼容逗号分隔
+      return s
+        .split(',')
+        .map(v => v.trim())
+        .filter(v => !!v && v !== 'null' && v !== 'undefined')
+    },
+    // 判断是否是跑腿员
+    isRunner(): boolean {
+      return checkIsRunner()
+    },
+    // 判断是否是订单的下单用户
+    isOrderOwner(): boolean {
+      const currentUserId = userState.userInfo?.id
+      return currentUserId !== null && currentUserId !== undefined && this.orderInfo.userId === currentUserId
+    },
+    // 是否显示收货码：仅订单创建者可见，在待取件、配送中、已完成时显示
+    shouldShowPickupCode(): boolean {
+      if (!this.orderInfo.pickupCode) return false
+      // 跑腿员不显示收货码
+      if (this.isRunner) return false
+      // 只有订单创建者才能看到收货码，且在待取件、配送中、已完成时显示
+      return this.isOrderOwner && this.orderInfo.status >= 2 && this.orderInfo.status <= 4
+    },
+    // 是否显示底部操作按钮
+    showActionButtons(): boolean {
+      if (this.isRunner) {
+        // 跑腿员：待接单或服务中状态显示操作按钮
+        return this.orderInfo.status === 2 || this.orderInfo.status === 3
+      } else {
+        // 下单用户：待支付或待接单状态显示支付/取消按钮
+        return (this.orderInfo.status === 1 || this.orderInfo.status === 2) && this.isOrderOwner
+      }
+    },
+    // 是否显示联系跑腿员按钮
+    // 仅订单创建者在「服务中」状态（status === 3）且订单已分配跑腿员时显示
+    showContactRunnerButton(): boolean {
+      return (
+        !this.isRunner && // 不是以跑腿员身份查看
+        this.isOrderOwner && // 当前用户为下单人
+        !!this.orderInfo.runnerId && // 已有接单跑腿员
+        this.orderInfo.status === 3 // 订单处于服务中
+      )
+    },
+    // 当前登录用户是否为该订单的跑腿员
+    isOrderRunner(): boolean {
+      const currentUserId = userState.userInfo?.id
+      return currentUserId !== null && currentUserId !== undefined && this.orderInfo.runnerId === currentUserId
+    },
+    // 进度条步骤
+    progressSteps(): Array<{ label: string; status: number }> {
+      return [
+        { label: '待支付', status: 1 },
+        { label: '待接单', status: 2 },
+        { label: '服务中', status: 3 },
+        { label: '已完成', status: 4 }
+      ]
+    }
+  },
+  onLoad(options) {
+    if (options.orderId) {
+      this.orderId = parseInt(options.orderId)
+      this.loadOrderDetail()
+    } else {
+      uni.showToast({
+        title: '订单ID缺失',
+        icon: 'none'
+      })
+    }
+  },
+  methods: {
+    async loadOrderDetail() {
+      try {
+        this.loading = true
+        const res = await getOrderDetail(this.orderId)
+        this.orderInfo = res
+      } catch (error) {
+        console.error('获取订单详情失败:', error)
+        uni.showToast({
+          title: '加载失败',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    goBack() {
+      uni.navigateBack()
+    },
+
+    getStatusText(status: number): string {
+      switch (status) {
+        case 1:
+          return '待支付'
+        case 2:
+          return '待接单'
+        case 3:
+          return '服务中'
+        case 4:
+          return '已完成'
+        case 5:
+          return '已取消'
+        default:
+          return '未知状态'
+      }
+    },
+
+    getStatusTip(): string {
+      switch (this.orderInfo.status) {
+        case 1:
+          return '订单已创建，请完成支付后系统派单'
+        case 2:
+          return '等待跑腿员接单中...'
+        case 3:
+          return '跑腿员服务中，请保持电话畅通'
+        case 4:
+          return '订单已完成，感谢使用'
+        case 5:
+          return '订单已取消'
+        default:
+          return ''
+      }
+    },
+
+    getProgressWidth(): string {
+      if (this.orderInfo.status === 5) return '0%'
+      const percentages = [0, 0, 33, 66, 100]
+      return (percentages[this.orderInfo.status] ?? 0) + '%'
+    },
+
+    isStepActive(index: number): boolean {
+      return this.orderInfo.status > index
+    },
+
+    isStepCurrent(index: number): boolean {
+      return this.orderInfo.status === index + 1
+    },
+
+    getPaymentMethodText(): string {
+      return this.orderInfo.paymentMethod === 1 ? '微信支付' : '银行卡支付'
+    },
+
+    formatMoney(v: any): string {
+      const n = Number(v)
+      if (Number.isFinite(n)) return n.toFixed(2)
+      return '0.00'
+    },
+
+    formatDistance(v: any): string {
+      const n = Number(v)
+      if (Number.isFinite(n)) return n.toFixed(2)
+      return '0.00'
+    },
+
+    formatTime(time: string): string {
+      if (!time) return ''
+      return time.replace('T', ' ').substring(0, 19)
+    },
+
+    callRunner() {
+      if (this.orderInfo.runnerPhone) {
+        uni.makePhoneCall({
+          phoneNumber: this.orderInfo.runnerPhone
+        })
+        this.closePhoneModal()
+      }
+    },
+
+    handleContactRunner() {
+      this.showContactModal = true
+    },
+
+    closeContactModal() {
+      this.showContactModal = false
+    },
+
+    closePhoneModal() {
+      this.showPhoneModal = false
+    },
+
+    handlePhoneContact() {
+      this.closeContactModal()
+      this.showPhoneModal = true
+    },
+
+    handleOnlineContact() {
+      this.closeContactModal()
+      if (!this.orderInfo.id) {
+        uni.showToast({
+          title: '订单信息缺失',
+          icon: 'none'
+        })
+        return
+      }
+      uni.navigateTo({
+        url: `/subpkg/chat-session?orderId=${this.orderInfo.id}`
+      })
+    },
+
+    previewImages(startIndex: number) {
+      if (!this.imageList.length) return
+      uni.previewImage({
+        current: this.imageList[startIndex],
+        urls: this.imageList
+      })
+    },
+
+    // 预览评价图片
+    previewEvaluationImages(startIndex: number) {
+      if (!this.evaluationImageList.length) return
+      uni.previewImage({
+        current: this.evaluationImageList[startIndex],
+        urls: this.evaluationImageList
+      })
+    },
+
+    async handlePay() {
+      try {
+        await payOrder(this.orderId)
+        uni.showToast({
+          title: '支付成功（模拟）',
+          icon: 'success'
+        })
+        setTimeout(() => {
+          this.loadOrderDetail()
+        }, 800)
+      } catch (error) {
+        console.error('支付失败:', error)
+        uni.showToast({
+          title: '支付失败',
+          icon: 'none'
+        })
+      }
+    },
+
+    handleCancel() {
+      const content =
+        this.orderInfo.status === 2
+          ? '订单已支付，取消后将为你申请退款，确定要取消吗？'
+          : '确定要取消订单吗？'
+
+      uni.showModal({
+        title: '提示',
+        content,
+        success: async (res) => {
+          if (res.confirm) {
+            try {
+              await cancelOrder(this.orderId, '用户取消')
+              uni.showToast({
+                title: '订单已取消',
+                icon: 'success'
+              })
+              setTimeout(() => {
+                this.loadOrderDetail()
+              }, 1500)
+            } catch (error) {
+              console.error('取消订单失败:', error)
+              uni.showToast({
+                title: '取消失败',
+                icon: 'none'
+              })
+            }
+          }
+        }
+      })
+    },
+
+    async handleAcceptOrder() {
+      // 检查跑腿员认证状态
+      try {
+        const authInfo = await getRunnerAuthInfo()
+        
+        // 如果没有认证信息，提示去认证
+        if (!authInfo) {
+          uni.showModal({
+            title: '提示',
+            content: '您还没有完成跑腿员认证，请先完成认证后才能接单',
+            showCancel: true,
+            confirmText: '去认证',
+            cancelText: '取消',
+            success: (res) => {
+              if (res.confirm) {
+                uni.navigateTo({
+                  url: '/pages/runner/auth-apply'
+                })
+              }
+            }
+          })
+          return
+        }
+
+        // 检查认证状态：1-待审核，2-已通过，3-已驳回
+        if (authInfo.certStatus === 1) {
+          uni.showModal({
+            title: '提示',
+            content: '您的认证申请正在审核中，审核通过后才能接单',
+            showCancel: false,
+            confirmText: '查看状态',
+            success: (res) => {
+              if (res.confirm) {
+                uni.navigateTo({
+                  url: '/pages/runner/auth-status'
+                })
+              }
+            }
+          })
+          return
+        }
+
+        if (authInfo.certStatus === 3) {
+          uni.showModal({
+            title: '提示',
+            content: '您的认证申请未通过，请重新申请认证后才能接单',
+            showCancel: true,
+            confirmText: '重新申请',
+            cancelText: '取消',
+            success: (res) => {
+              if (res.confirm) {
+                uni.navigateTo({
+                  url: '/pages/runner/auth-apply'
+                })
+              }
+            }
+          })
+          return
+        }
+
+        // 如果认证状态不是已认证（2），提示去认证
+        if (authInfo.certStatus !== 2) {
+          uni.showModal({
+            title: '提示',
+            content: '您还没有完成跑腿员认证，请先完成认证后才能接单',
+            showCancel: true,
+            confirmText: '去认证',
+            cancelText: '取消',
+            success: (res) => {
+              if (res.confirm) {
+                uni.navigateTo({
+                  url: '/pages/runner/auth-apply'
+                })
+              }
+            }
+          })
+          return
+        }
+
+        // 认证通过，可以接单
+        uni.showModal({
+          title: '确认接单',
+          content: `确定要接这个订单吗？跑腿收益：¥${this.orderInfo.runnerFee ? this.orderInfo.runnerFee.toFixed(2) : '0.00'}`,
+          success: async (res) => {
+            if (res.confirm) {
+              try {
+                await acceptOrder(this.orderId)
+                uni.showToast({
+                  title: '接单成功',
+                  icon: 'success'
+                })
+                setTimeout(() => {
+                  this.loadOrderDetail()
+                }, 1500)
+              } catch (error) {
+                console.error('接单失败:', error)
+                uni.showToast({
+                  title: '接单失败，请重试',
+                  icon: 'none'
+                })
+              }
+            }
+          }
+        })
+      } catch (error) {
+        console.error('获取认证信息失败:', error)
+        uni.showToast({
+          title: '获取认证信息失败，请重试',
+          icon: 'none'
+        })
+      }
+    },
+
+    // 跑腿员端从订单详情页进入确认收货
+    goConfirmReceive() {
+      if (!this.orderInfo.id) return
+      uni.navigateTo({
+        url: `/pages/runner/confirm-receive?orderId=${this.orderInfo.id}`
+      })
+    },
+
+    // 订单详情中跳转评价页（下单用户）
+    goEvaluateFromDetail() {
+      if (!this.orderInfo.id || !this.isOrderOwner) return
+      uni.navigateTo({
+        url: `/subpkg/order-evaluate?orderId=${this.orderInfo.id}`
+      })
+    },
+
+    // 跳转到跑腿员详情页
+    goRunnerProfile() {
+      if (!this.orderInfo.runnerId) return
+      uni.navigateTo({
+        url: `/subpkg/runner-profile?runnerUserId=${this.orderInfo.runnerId}`
+      })
+    }
+  }
+}
+</script>
+
+<style scoped>
+.order-detail-container {
+  min-height: 100vh;
+  background: var(--background-color, #f9fafb);
+  padding-bottom: 150rpx;
+  display: flex;
+  flex-direction: column;
+}
+
+.content-scroll {
+  flex: 1;
+  padding-bottom: 200rpx;
+  box-sizing: border-box;
+}
+
+/* 导航栏 */
+.navbar {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  padding: 60rpx 30rpx 30rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  box-shadow: 0 4rpx 20rpx rgba(37, 99, 235, 0.15);
+  position: relative;
+}
+
+.back-btn {
+  width: 80rpx;
+  height: 80rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+.back-icon {
+  font-size: 40rpx;
+  color: #ffffff;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ffffff;
+  letter-spacing: 1rpx;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.placeholder {
+  width: 80rpx;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* 订单状态 */
+.status-section {
+  margin: 20rpx 30rpx 24rpx;
+  padding: 40rpx;
+  background: var(--list-background-color, #ffffff);
+  border-radius: 20rpx;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14rpx;
+}
+
+.fee-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+
+.fee-item {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.fee-amount {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #f97316;
+}
+
+.status-badge {
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.10);
+}
+
+.status-badge.s5 {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.10);
+}
+
+.status-badge.s4 {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.10);
+}
+
+.status-amount {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #ff6b6b;
+}
+
+.status-sub {
+  font-size: 26rpx;
+  color: #94a3b8;
+  margin-bottom: 10rpx;
+  text-align: center;
+}
+
+.status-tip {
+  font-size: 26rpx;
+  color: #9ca3af;
+  text-align: center;
+}
+
+/* 进度条样式 */
+.progress-bar {
+  margin-top: 30rpx;
+  padding-top: 30rpx;
+  border-top: 1rpx solid #f5f5f5;
+}
+
+.progress-container {
+  position: relative;
+  padding-top: 20rpx;
+}
+
+.progress-track {
+  position: relative;
+  height: 6rpx;
+  background: #e5e7eb;
+  border-radius: 999rpx;
+  margin: 20rpx 20rpx 0 20rpx;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  border-radius: 999rpx;
+  transition: width 0.3s ease;
+}
+
+.progress-nodes {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  margin-top: -23rpx;
+  padding: 0 10rpx;
+}
+
+.progress-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 25%;
+}
+
+.node-dot {
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  background: #e5e7eb;
+  border: 4rpx solid #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+}
+
+.progress-node.active .node-dot {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 60%, #60a5fa 100%);
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.35);
+}
+
+.progress-node.current .node-dot {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 60%, #60a5fa 100%);
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.35);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+.node-check {
+  font-size: 20rpx;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.node-label {
+  font-size: 22rpx;
+  color: #9ca3af;
+  margin-top: 12rpx;
+  text-align: center;
+  transition: color 0.3s ease;
+}
+
+.progress-node.active .node-label,
+.progress-node.current .node-label {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+/* 收货码 */
+.pickup-code-section {
+  margin: 0 30rpx 24rpx;
+}
+
+.code-card {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 55%, #60a5fa 100%);
+  border-radius: 20rpx;
+  padding: 40rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 8rpx 20rpx rgba(37, 99, 235, 0.28);
+}
+
+.code-label {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 15rpx;
+}
+
+.code-value {
+  font-size: 72rpx;
+  font-weight: bold;
+  color: #ffffff;
+  letter-spacing: 10rpx;
+  margin-bottom: 15rpx;
+}
+
+.code-tip {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: center;
+}
+
+/* 物品信息 */
+.item-section {
+  margin: 0 30rpx 24rpx;
+}
+
+.item-card {
+  background: var(--list-background-color, #ffffff);
+  border-radius: 20rpx;
+  padding: 30rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.item-desc {
+  font-size: 28rpx;
+  color: var(--text-color, #475569);
+  line-height: 1.6;
+}
+
+.image-scroll {
+  margin-top: 20rpx;
+  white-space: nowrap;
+}
+
+.image-row {
+  display: flex;
+  flex-direction: row;
+  gap: 16rpx;
+}
+
+.item-image {
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 16rpx;
+  background: #f1f5f9;
+  flex-shrink: 0;
+}
+
+/* 跑腿员信息 */
+.runner-section {
+  margin: 0 30rpx 24rpx;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.title-icon {
+  font-size: 32rpx;
+  margin-right: 10rpx;
+}
+
+.title-text {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: var(--text-color, #333333);
+}
+
+.runner-card {
+  background: var(--list-background-color, #ffffff);
+  border-radius: 20rpx;
+  padding: 30rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.runner-card-hint {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  margin-top: 16rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f5f5f5;
+}
+
+.hint-text {
+  font-size: 24rpx;
+  color: #2563eb;
+}
+
+.hint-arrow {
+  font-size: 28rpx;
+  color: #2563eb;
+  margin-left: 8rpx;
+}
+
+/* 订单信息 */
+.order-info-section {
+  margin: 0 30rpx 24rpx;
+}
+
+.info-card {
+  background: var(--list-background-color, #ffffff);
+  border-radius: 20rpx;
+  padding: 30rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.info-item:last-child {
+  margin-bottom: 0;
+}
+
+.info-label {
+  font-size: 28rpx;
+  color: #6b7280;
+}
+
+.info-value {
+  font-size: 28rpx;
+  color: var(--text-color, #333333);
+  text-align: right;
+  flex: 1;
+  margin-left: 20rpx;
+}
+
+.info-line {
+  font-size: 28rpx;
+  color: #6b7280;
+  line-height: 1.6;
+  margin-bottom: 8rpx;
+}
+
+.info-line-value {
+  color: var(--text-color, #333333);
+}
+
+.info-line-amount {
+  margin-top: 8rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f5f5f5;
+}
+
+.info-line-amount-value {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ff6b6b;
+}
+
+/* 地址信息 */
+.address-section {
+  margin: 0 30rpx 24rpx;
+}
+
+.address-card {
+  background: var(--list-background-color, #ffffff);
+  border-radius: 20rpx;
+  padding: 30rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.address-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.address-label {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15rpx;
+}
+
+.label-icon {
+  font-size: 24rpx;
+  margin-right: 10rpx;
+}
+
+.label-text {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: var(--text-color, #333333);
+}
+
+.address-content {
+  margin-left: 34rpx;
+}
+.address-line {
+  font-size: 28rpx;
+  color: #6b7280;
+  line-height: 1.6;
+  margin-bottom: 8rpx;
+}
+
+.address-line-value {
+  color: var(--text-color, #333333);
+}
+
+.address-divider {
+  height: 1rpx;
+  background: #f5f5f5;
+  margin: 30rpx 0;
+}
+
+.info-item-column {
+  margin-bottom: 16rpx;
+}
+
+.info-item-column:last-child {
+  margin-bottom: 0;
+}
+
+.info-value-block {
+  margin-top: 6rpx;
+  font-size: 28rpx;
+  color: var(--text-color, #333333);
+}
+
+.info-item-amount {
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f5f5f5;
+  margin-top: 8rpx;
+}
+
+.info-value-amount {
+  margin-top: 6rpx;
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ff6b6b;
+}
+
+/* 订单评价（评论区样式） */
+.evaluation-section {
+  margin: 0 30rpx 24rpx;
+}
+
+.evaluation-card {
+  background: var(--list-background-color, #ffffff);
+  border-radius: 20rpx;
+  padding: 30rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.eval-star-rows {
+  margin-bottom: 16rpx;
+}
+
+.eval-star-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.eval-star-label {
+  width: 160rpx;
+  font-size: 26rpx;
+  color: #6b7280;
+}
+
+.eval-star-list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.eval-star {
+  font-size: 32rpx;
+  color: #e5e7eb;
+  margin-right: 6rpx;
+}
+
+.eval-star.active {
+  color: #ffb400;
+}
+
+.eval-star-score {
+  margin-left: 12rpx;
+  font-size: 24rpx;
+  color: #f97316;
+}
+
+.evaluation-content {
+  margin-top: 8rpx;
+  font-size: 28rpx;
+  color: #4b5563;
+  line-height: 1.6;
+}
+
+.evaluation-image-scroll {
+  margin-top: 16rpx;
+  white-space: nowrap;
+}
+
+.evaluation-image-row {
+  display: flex;
+  flex-direction: row;
+  gap: 16rpx;
+}
+
+.evaluation-image {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 16rpx;
+  background: #f1f5f9;
+  flex-shrink: 0;
+}
+
+/* 备注信息 */
+.remark-section {
+  margin: 0 30rpx 30rpx;
+}
+
+.remark-card {
+  background: var(--list-background-color, #ffffff);
+  border-radius: 20rpx;
+  padding: 30rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.remark-text {
+  font-size: 28rpx;
+  color: #6b7280;
+  line-height: 1.6;
+}
+
+.action-section {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20rpx 30rpx calc(20rpx + env(safe-area-inset-bottom, 0));
+  background: var(--list-background-color, #ffffff);
+  box-shadow: 0 -4rpx 12rpx rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: 20rpx;
+}
+
+.action-btn {
+  flex: 1;
+  height: 96rpx;
+  border-radius: 999rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pay-btn {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 60%, #60a5fa 100%);
+  box-shadow: 0 10rpx 26rpx rgba(37, 99, 235, 0.35);
+}
+
+.pay-btn .btn-text {
+  color: #ffffff;
+}
+
+.cancel-btn {
+  background: transparent;
+  border-width: 2rpx;
+  border-style: solid;
+  border-color: #e5e7eb;
+}
+
+.cancel-btn .btn-text {
+  color: #4b5563;
+}
+
+.accept-btn {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 60%, #60a5fa 100%);
+  box-shadow: 0 10rpx 26rpx rgba(37, 99, 235, 0.35);
+}
+
+.accept-btn .btn-text {
+  color: #ffffff;
+}
+
+.confirm-receive-btn {
+  /* 使用与主按钮同一色系的蓝色渐变，语义上表示“完成”但保持整体视觉统一 */
+  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 55%, #60a5fa 100%);
+  box-shadow: 0 10rpx 26rpx rgba(37, 99, 235, 0.32);
+}
+
+.confirm-receive-btn .btn-text {
+  color: #ffffff;
+}
+
+.btn-text {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.contact-runner-btn {
+  /* 与整体主题保持一致的蓝色渐变样式 */
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 60%, #60a5fa 100%);
+  box-shadow: 0 10rpx 26rpx rgba(37, 99, 235, 0.35);
+}
+
+.contact-runner-btn .btn-text {
+  color: #ffffff;
+}
+
+/* 弹窗样式 */
+.modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-content {
+  width: 600rpx;
+  background: #ffffff;
+  border-radius: 24rpx;
+  overflow: hidden;
+  animation: modalSlideUp 0.3s ease-out;
+}
+
+@keyframes modalSlideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 40rpx 30rpx;
+  border-bottom: 1rpx solid #f5f5f5;
+}
+
+.modal-title {
+  flex: 1;
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333333;
+  text-align: center;
+}
+
+.modal-close {
+  width: 60rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+}
+
+.close-icon {
+  font-size: 48rpx;
+  color: #999999;
+  line-height: 1;
+}
+
+.modal-body {
+  padding: 30rpx;
+}
+
+.contact-option {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 30rpx 0;
+  border-bottom: 1rpx solid #f5f5f5;
+}
+
+.contact-option:last-child {
+  border-bottom: none;
+}
+
+.option-icon {
+  font-size: 40rpx;
+  margin-right: 20rpx;
+}
+
+.option-text {
+  flex: 1;
+  font-size: 30rpx;
+  color: #333333;
+}
+
+.option-arrow {
+  font-size: 36rpx;
+  color: #999999;
+}
+
+.phone-modal-content {
+  width: 500rpx;
+}
+
+.phone-number {
+  display: block;
+  font-size: 48rpx;
+  font-weight: bold;
+  color: #2563eb;
+  text-align: center;
+  margin-bottom: 40rpx;
+  padding: 20rpx 0;
+}
+
+.call-btn {
+  width: 100%;
+  height: 88rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 60%, #60a5fa 100%);
+  border-radius: 44rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10rpx 26rpx rgba(37, 99, 235, 0.35);
+}
+
+.call-btn-text {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #ffffff;
+}
+</style>

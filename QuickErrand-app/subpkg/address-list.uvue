@@ -1,0 +1,491 @@
+<template>
+  <view class="address-list-container">
+    <!-- 头部背景 -->
+    <view class="header-bg">
+      <view class="wave"></view>
+    </view>
+
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="nav-title">地址管理</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 地址列表 -->
+    <view class="address-list">
+      <view
+        v-for="(item, index) in addressList"
+        :key="item.id"
+        class="address-item"
+        @click="selectAddress(item)"
+      >
+        <view class="address-content">
+          <view class="address-header">
+            <view class="address-label-wrapper">
+              <text class="address-label-icon">📍</text>
+              <view class="address-info">
+                <view class="contact-row">
+                  <text class="contact-name">{{ item.contactName }}</text>
+                  <text class="contact-phone">{{ item.contactPhone }}</text>
+                  <view v-if="item.isDefault === 1" class="default-tag">
+                    <text class="default-text">默认</text>
+                  </view>
+                </view>
+                <text class="address-detail">
+                  {{ item.province }} {{ item.city }} {{ item.district }} {{ item.detailAddress }}
+                </text>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <view class="address-actions">
+          <view class="action-btn action-btn-edit" @click.stop="editAddress(item)">
+            <text class="action-text">编辑</text>
+          </view>
+          <view class="action-btn action-btn-delete" @click.stop="deleteAddressConfirm(item)">
+            <text class="action-text">删除</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 空状态 -->
+      <view v-if="addressList.length === 0 && !loading" class="empty-state">
+        <view class="empty-card">
+          <text class="empty-icon">📍</text>
+          <text class="empty-text">暂无地址</text>
+          <text class="empty-tip">点击下方按钮添加新地址</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 添加地址按钮 -->
+    <view class="add-btn-wrapper">
+      <button class="add-btn" @click="addAddress">
+        <text class="add-btn-text">+ 添加新地址</text>
+      </button>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getAddressList, deleteAddress, setDefaultAddress } from '@/common/api/address.uts'
+
+export default {
+  data() {
+    return {
+      addressList: [],
+      loading: false,
+      selectMode: ''
+    }
+  },
+  onLoad(options) {
+    if (options.selectMode) {
+      this.selectMode = options.selectMode
+    }
+    this.loadAddressList()
+  },
+  onShow() {
+    this.loadAddressList()
+  },
+  methods: {
+    async loadAddressList() {
+      this.loading = true
+      try {
+        const res = await getAddressList()
+        this.addressList = res
+      } catch (error) {
+        console.error('获取地址列表失败:', error)
+      } finally {
+        this.loading = false
+      }
+    },
+
+    goBack() {
+      uni.navigateBack()
+    },
+
+    selectAddress(item) {
+      if (this.selectMode) {
+        // 选择地址模式，返回选中的地址
+        console.log('发送地址选择事件:', { mode: this.selectMode, address: item })
+        // 先发送事件，然后延迟返回，确保事件能够被接收
+        uni.$emit('addressSelected', {
+          mode: this.selectMode,
+          address: item
+        })
+        // 使用 setTimeout 确保事件先发送，再返回页面
+        setTimeout(() => {
+          uni.navigateBack()
+        }, 50)
+      }
+    },
+
+    addAddress() {
+      uni.navigateTo({
+        url: '/subpkg/address-edit'
+      })
+    },
+
+    editAddress(item) {
+      uni.navigateTo({
+        url: `/subpkg/address-edit?id=${item.id}`
+      })
+    },
+
+    deleteAddressConfirm(item) {
+      uni.showModal({
+        title: '提示',
+        content: '确定要删除这个地址吗？',
+        success: async (res) => {
+          if (res.confirm) {
+            await this.handleDelete(item.id)
+          }
+        }
+      })
+    },
+
+    async handleDelete(id) {
+      try {
+        await deleteAddress(id)
+        uni.showToast({
+          title: '删除成功',
+          icon: 'success'
+        })
+        this.loadAddressList()
+      } catch (error) {
+        console.error('删除地址失败:', error)
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+.address-list-container {
+  min-height: 100vh;
+  background: #f9fafb;
+  padding-bottom: 40rpx;
+  box-sizing: border-box;
+}
+
+/* 头部背景 */
+.header-bg {
+  position: relative;
+  height: 280rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(37, 99, 235, 0.15);
+}
+
+.wave {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 200%;
+  height: 100rpx;
+  background: #f9fafb;
+  border-radius: 50% 50% 0 0;
+  transform: translateX(-25%);
+}
+
+/* 导航栏 */
+.navbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  z-index: 10;
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10rpx);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  flex-shrink: 0;
+  z-index: 11;
+}
+
+.back-btn:active {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(0.95);
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 1rpx;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.placeholder {
+  width: 64rpx;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* 地址列表 */
+.address-list {
+  padding: 0 30rpx;
+  margin-top: 20rpx;
+}
+
+.address-item {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 36rpx 30rpx;
+  margin-bottom: 20rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+  transition: background 0.3s;
+}
+
+.address-item:active {
+  background: #f9fafb;
+}
+
+.address-content {
+  flex: 1;
+  margin-right: 20rpx;
+  min-width: 0;
+}
+
+.address-header {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.address-label-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+}
+
+.address-label-icon {
+  font-size: 36rpx;
+  margin-right: 16rpx;
+  flex-shrink: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  width: 36rpx;
+  text-align: center;
+  margin-top: 4rpx;
+}
+
+.address-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.contact-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 12rpx;
+  flex-wrap: wrap;
+}
+
+.contact-name {
+  font-size: 32rpx;
+  color: #1f2937;
+  font-weight: 600;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.contact-phone {
+  font-size: 28rpx;
+  color: #6b7280;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+}
+
+.default-tag {
+  padding: 4rpx 12rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 8rpx;
+  flex-shrink: 0;
+}
+
+.default-text {
+  font-size: 22rpx;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.address-detail {
+  font-size: 28rpx;
+  color: #6b7280;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.address-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 16rpx;
+  flex-shrink: 0;
+}
+
+.action-btn {
+  padding: 12rpx 24rpx;
+  border-radius: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  min-width: 80rpx;
+}
+
+.action-btn-edit {
+  background: #eff6ff;
+  border: 1rpx solid #dbeafe;
+}
+
+.action-btn-edit:active {
+  background: #dbeafe;
+  transform: scale(0.98);
+}
+
+.action-btn-delete {
+  background: #fef2f2;
+  border: 1rpx solid #fee2e2;
+}
+
+.action-btn-delete:active {
+  background: #fee2e2;
+  transform: scale(0.98);
+}
+
+.action-text {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.action-btn-edit .action-text {
+  color: #2563eb;
+}
+
+.action-btn-delete .action-text {
+  color: #dc2626;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 30rpx;
+}
+
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 80rpx 40rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+  margin-bottom: 30rpx;
+  opacity: 0.6;
+}
+
+.empty-text {
+  font-size: 32rpx;
+  color: #1f2937;
+  font-weight: 500;
+  margin-bottom: 12rpx;
+}
+
+.empty-tip {
+  font-size: 26rpx;
+  color: #9ca3af;
+}
+
+/* 添加按钮 */
+.add-btn-wrapper {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 30rpx;
+  background: #ffffff;
+  box-shadow: 0 -4rpx 12rpx rgba(0, 0, 0, 0.05);
+  z-index: 100;
+}
+
+.add-btn {
+  width: 100%;
+  height: 100rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 50rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.3);
+  transition: all 0.3s;
+  padding: 0;
+  margin: 0;
+}
+
+.add-btn::after {
+  border: none;
+}
+
+.add-btn:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+.add-btn-text {
+  font-size: 32rpx;
+  color: #ffffff;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+}
+</style>

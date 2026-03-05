@@ -1,0 +1,69 @@
+<template>
+  <view class="empty-container">
+    <image class="empty-image" :src="image" mode="aspectFit"></image>
+    <text class="empty-text">{{ text }}</text>
+    <button v-if="showButton" class="empty-button" @click="handleClick">{{ buttonText }}</button>
+  </view>
+</template>
+
+<script>
+export default {
+  name: 'Empty',
+  props: {
+    image: {
+      type: String,
+      default: '/static/empty.png'
+    },
+    text: {
+      type: String,
+      default: '暂无数据'
+    },
+    showButton: {
+      type: Boolean,
+      default: false
+    },
+    buttonText: {
+      type: String,
+      default: '刷新'
+    }
+  },
+  methods: {
+    handleClick() {
+      this.$emit('click')
+    }
+  }
+}
+</script>
+
+<style scoped>
+.empty-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 0;
+}
+
+.empty-image {
+  width: 300rpx;
+  height: 300rpx;
+  margin-bottom: 30rpx;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #999999;
+  margin-bottom: 30rpx;
+}
+
+.empty-button {
+  width: 200rpx;
+  height: 70rpx;
+  line-height: 70rpx;
+  background-color: #409eff;
+  color: #ffffff;
+  border-radius: 35rpx;
+  font-size: 28rpx;
+  text-align: center;
+}
+</style>

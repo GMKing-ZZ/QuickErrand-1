@@ -1,0 +1,207 @@
+/**
+ * 网络请求配置
+ */
+export const config = {
+  // 基础URL
+  baseURL: 'http://localhost:8088/api',
+  // 请求超时时间
+  timeout: 10000,
+  // Token存储key
+  tokenKey: 'token'
+}
+
+/**
+ * 请求拦截器
+ */
+const requestInterceptor = (options : RequestOptions) : RequestOptions => {
+  // 添加token
+  const token = uni.getStorageSync(config.tokenKey)
+  if (token) {
+    if (!options.header) {
+      options.header = {}
+    }
+    options.header['Authorization'] = `Bearer ${token}`
+  }
+
+  // 添加完整URL
+  if (!options.url.startsWith('http')) {
+    options.url = config.baseURL + options.url
+  }
+
+  return options
+}
+
+/**
+ * 响应拦截器
+ */
+const responseInterceptor = (response : RequestSuccessCallbackResult) : any => {
+  const data = response.data as UTSJSONObject
+  
+  // 检查响应数据格式
+  if (!data || typeof data !== 'object') {
+    const errorMsg = '响应数据格式错误'
+    uni.showToast({
+      title: errorMsg,
+      icon: 'none',
+      duration: 2000
+    })
+    throw new Error(errorMsg)
+  }
+  
+  const code = data['code'] as number
+  const message = data['message'] as string || '请求失败'
+
+  if (code === 200) {
+    return data['data']
+  } else if (code === 401) {
+    // 未授权，跳转到登录页
+    uni.removeStorageSync(config.tokenKey)
+    uni.reLaunch({
+      url: '/subpkg/login'
+    })
+    throw new Error(message)
+  } else {
+    // 其他错误，显示错误信息
+    uni.showToast({
+      title: message,
+      icon: 'none',
+      duration: 2000
+    })
+    throw new Error(message)
+  }
+}
+
+/**
+ * 网络请求封装
+ */
+export const request = <T>(options : RequestOptions) : Promise<T> => {
+  return new Promise((resolve, reject) => {
+    // 请求拦截
+    const requestOptions = requestInterceptor(options)
+
+    uni.request({
+      ...requestOptions,
+      success: (res : RequestSuccessCallbackResult) => {
+        try {
+          const data = responseInterceptor(res)
+          resolve(data as T)
+        } catch (error: any) {
+          const errorMsg = error?.message || error || '请求失败'
+          console.error('请求处理失败:', errorMsg)
+          reject(error)
+        }
+      },
+      fail: (err : RequestFailCallbackErr) => {
+        const errorMsg = err.errMsg || '网络请求失败'
+        console.error('网络请求失败:', err)
+        uni.showToast({
+          title: errorMsg,
+          icon: 'none',
+          duration: 2000
+        })
+        reject(new Error(errorMsg))
+      }
+    })
+  })
+}
+
+/**
+ * GET请求
+ */
+export const get = <T>(url : string, data ?: any) : Promise<T> => {
+  // 过滤掉 null 和 undefined 的值，避免在查询参数中出现 "null" 字符串
+  const filteredData = data ? Object.keys(data).reduce((acc : any, key : string) => {
+    const value = data[key]
+    if (value !== null && value !== undefined) {
+      acc[key] = value
+    }
+    return acc
+  }, {}) : undefined
+  
+  return request<T>({
+    url,
+    method: 'GET',
+    data: filteredData
+  })
+}
+
+/**
+ * POST请求
+ */
+export const post = <T>(url : string, data ?: any) : Promise<T> => {
+  return request<T>({
+    url,
+    method: 'POST',
+    data,
+    header: {
+      'Content-Type': 'application/json'
+    }
+  })
+}
+
+/**
+ * PUT请求
+ */
+export const put = <T>(url : string, data ?: any) : Promise<T> => {
+  return request<T>({
+    url,
+    method: 'PUT',
+    data,
+    header: {
+      'Content-Type': 'application/json'
+    }
+  })
+}
+
+/**
+ * DELETE请求
+ */
+export const del = <T>(url : string, data ?: any) : Promise<T> => {
+  return request<T>({
+    url,
+    method: 'DELETE',
+    data
+  })
+}
+
+/**
+ * 文件上传
+ */
+export const upload = (url : string, filePath : string, formData ?: any) : Promise<any> => {
+  return new Promise((resolve, reject) => {
+    const token = uni.getStorageSync(config.tokenKey)
+    const fullUrl = url.startsWith('http') ? url : config.baseURL + url
+
+    uni.uploadFile({
+      url: fullUrl,
+      filePath: filePath,
+      name: 'file',
+      formData: formData,
+      header: {
+        'Authorization': `Bearer ${token}`
+      },
+      success: (res : UploadFileSuccessCallbackResult) => {
+        const data = JSON.parse(res.data) as UTSJSONObject
+        const code = data['code'] as number
+
+        if (code === 200) {
+          resolve(data['data'])
+        } else {
+          const message = data['message'] as string
+          uni.showToast({
+            title: message || '上传失败',
+            icon: 'none'
+          })
+          reject(message)
+        }
+      },
+      fail: (err : UploadFileFailCallbackErr) => {
+        uni.showToast({
+          title: '上传失败',
+          icon: 'none'
+        })
+        reject(err)
+      }
+    })
+  })
+}

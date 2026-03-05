@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build outputs
+build/
+dist/
+*.local
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Uploads
+uploads/
+
+# Test coverage
+coverage/
+*.lcov
+
+# Temporary files
+tmp/
+temp/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# System directories
+config/
+LogFiles/
+WebThreatDefSvc/
+
+# Uni-app specific
+QuickErrand-app/unpackage/
+!.QuickErrand-app/unpackage/README.md
+
+# Maven
+QuickErrand-backend/target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Backend
+*.class
+*.log
+*.jar
+*.war

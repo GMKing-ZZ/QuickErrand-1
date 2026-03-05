@@ -1,0 +1,163 @@
+/**
+ * 用户相关API
+ */
+import { post, get, put, del } from '../utils/request.uts'
+
+/**
+ * 登录参数
+ */
+export type LoginParams = {
+  phone: string
+  password: string
+}
+
+/**
+ * 注册参数
+ */
+export type RegisterParams = {
+  phone: string
+  password: string
+  code: string
+  nickname?: string
+  userType?: number  // 用户类型：1-普通用户，2-跑腿员
+}
+
+/**
+ * 登录响应
+ */
+export type LoginResponse = {
+  token: string
+  userInfo: any
+}
+
+/**
+ * 更新用户信息参数
+ */
+export type UpdateUserInfoParams = {
+  username?: string
+  nickname?: string
+  avatar?: string
+  gender?: number
+  birthday?: string
+  pickupCodeEnabled?: boolean
+  phone?: string
+  code?: string
+}
+
+/**
+ * 修改密码参数
+ */
+export type ChangePasswordParams = {
+  oldPassword: string
+  newPassword: string
+}
+
+/**
+ * 重置密码参数
+ */
+export type ResetPasswordParams = {
+  phone: string
+  newPassword: string
+  code: string
+}
+
+/**
+ * 评价信息
+ */
+export type ReviewInfo = {
+  id: number
+  orderId: number
+  orderNo: string
+  userId: number
+  runnerId: number
+  runnerName: string
+  serviceScore: number
+  attitudeScore: number
+  content: string
+  images: string
+  tags: string
+  isAnonymous: number
+  status: number
+  createTime: string
+}
+
+/**
+ * 分页响应
+ */
+export type PageResponse<T> = {
+  records: T[]
+  total: number
+  size: number
+  current: number
+  pages: number
+}
+
+/**
+ * 用户登录
+ */
+export const login = (data : LoginParams) : Promise<LoginResponse> => {
+  return post<LoginResponse>('/auth/login', data)
+}
+
+/**
+ * 用户注册
+ */
+export const register = (data : RegisterParams) : Promise<any> => {
+  return post('/auth/register', data)
+}
+
+/**
+ * 发送验证码
+ */
+export const sendCode = (phone : string) : Promise<any> => {
+  return post(`/auth/sendCode?phone=${encodeURIComponent(phone)}`, undefined)
+}
+
+/**
+ * 微信登录
+ */
+export const wxLogin = (data : any) : Promise<LoginResponse> => {
+  return post<LoginResponse>('/auth/wxLogin', data)
+}
+
+/**
+ * 获取用户信息
+ */
+export const getUserInfo = () : Promise<any> => {
+  return get('/user/info')
+}
+
+/**
+ * 更新用户信息
+ */
+export const updateUserInfo = (data : UpdateUserInfoParams) : Promise<any> => {
+  return put('/user/info', data)
+}
+
+/**
+ * 修改密码
+ */
+export const changePassword = (data : ChangePasswordParams) : Promise<any> => {
+  return put('/user/password', data)
+}
+
+/**
+ * 重置密码（忘记密码）
+ */
+export const resetPassword = (data : ResetPasswordParams) : Promise<any> => {
+  return post('/auth/resetPassword', data)
+}
+
+/**
+ * 获取我的评价列表
+ */
+export const getMyReviews = (pageNum : number = 1, pageSize : number = 10) : Promise<PageResponse<ReviewInfo>> => {
+  return get<PageResponse<ReviewInfo>>('/user/reviews', { pageNum, pageSize })
+}
+
+/**
+ * 删除当前用户（用于微信登录后未设置密码的情况）
+ */
+export const deleteCurrentUser = () : Promise<any> => {
+  return del('/user/current')
+}

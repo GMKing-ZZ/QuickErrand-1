@@ -1,0 +1,83 @@
+/**
+ * 订单状态管理
+ */
+
+export type Order = {
+  id: number
+  orderNo: string
+  orderType: number
+  orderTypeName: string
+  status: number
+  statusName: string
+  pickupAddress: string
+  deliveryAddress: string
+  fee: number
+  createTime: string
+}
+
+type OrderState = {
+  // 当前订单列表
+  orderList: Order[]
+  // 当前订单详情
+  currentOrder: Order | null
+  // 订单总数
+  total: number
+}
+
+export const orderState = reactive({
+  orderList: [],
+  currentOrder: null,
+  total: 0
+} as OrderState)
+
+/**
+ * 设置订单列表
+ */
+export const setOrderList = (list : Order[]) => {
+  orderState.orderList = list
+}
+
+/**
+ * 添加订单到列表
+ */
+export const addOrder = (order : Order) => {
+  orderState.orderList.unshift(order)
+  orderState.total++
+}
+
+/**
+ * 更新订单
+ */
+export const updateOrder = (orderId : number, data : Partial<Order>) => {
+  const index = orderState.orderList.findIndex(item => item.id === orderId)
+  if (index !== -1) {
+    orderState.orderList[index] = { ...orderState.orderList[index], ...data }
+  }
+}
+
+/**
+ * 删除订单
+ */
+export const removeOrder = (orderId : number) => {
+  const index = orderState.orderList.findIndex(item => item.id === orderId)
+  if (index !== -1) {
+    orderState.orderList.splice(index, 1)
+    orderState.total--
+  }
+}
+
+/**
+ * 设置当前订单
+ */
+export const setCurrentOrder = (order : Order | null) => {
+  orderState.currentOrder = order
+}
+
+/**
+ * 清空订单列表
+ */
+export const clearOrderList = () => {
+  orderState.orderList = []
+  orderState.currentOrder = null
+  orderState.total = 0
+}

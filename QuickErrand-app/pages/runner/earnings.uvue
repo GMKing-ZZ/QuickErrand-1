@@ -1,0 +1,339 @@
+<template>
+  <view class="earnings-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">←</text>
+      </view>
+      <text class="nav-title">我的收益</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 加载中 -->
+    <view v-if="loading" class="loading-wrapper">
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <!-- 收益统计 -->
+    <view v-else class="content">
+      <!-- 总收益卡片 -->
+      <view class="total-card">
+        <text class="total-label">总收益（元）</text>
+        <text class="total-amount">{{ statistics.totalEarnings || '0.00' }}</text>
+        <view class="total-info">
+          <view class="info-item">
+            <text class="info-label">今日收益</text>
+            <text class="info-value">¥{{ statistics.todayEarnings || '0.00' }}</text>
+          </view>
+          <view class="info-divider"></view>
+          <view class="info-item">
+            <text class="info-label">本月收益</text>
+            <text class="info-value">¥{{ statistics.monthEarnings || '0.00' }}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 收益详情：可提现金额 / 待结算 / 已结算 同一行展示 -->
+      <view class="detail-row-card">
+        <view class="detail-item">
+          <text class="detail-label">可提现金额</text>
+          <text class="detail-amount">¥{{ statistics.withdrawableAmount || '0.00' }}</text>
+        </view>
+        <view class="detail-divider"></view>
+        <view class="detail-item">
+          <text class="detail-label">待结算</text>
+          <text class="detail-amount">¥{{ statistics.pendingEarnings || '0.00' }}</text>
+        </view>
+        <view class="detail-divider"></view>
+        <view class="detail-item">
+          <text class="detail-label">已结算</text>
+          <text class="detail-amount">¥{{ statistics.settledEarnings || '0.00' }}</text>
+        </view>
+      </view>
+
+      <!-- 操作按钮 -->
+      <view class="action-section">
+        <button class="action-btn primary" @click="goToWithdrawal">
+          <text class="btn-text">申请提现</text>
+        </button>
+        <button class="action-btn secondary" @click="goToDetails">
+          <text class="btn-text">收益明细</text>
+        </button>
+        <button class="action-btn secondary" @click="goToWithdrawalRecords">
+          <text class="btn-text">提现记录</text>
+        </button>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getEarningsStatistics } from '@/common/api/runner.uts'
+import { userState } from '@/store/user.uts'
+
+export default {
+  data() {
+    return {
+      loading: true,
+      statistics: {} as any
+    }
+  },
+  onLoad() {
+    this.checkRunnerAccess()
+  },
+  onShow() {
+    // 页面显示时刷新数据
+    this.checkRunnerAccess()
+  },
+  methods: {
+    goBack() {
+      uni.navigateBack()
+    },
+
+    checkRunnerAccess() {
+      const info: any = userState.userInfo
+      if (!info || info.userType !== 2) {
+        uni.showModal({
+          title: '提示',
+          content: '当前账号不是跑腿员，无法查看跑腿员收益',
+          showCancel: false,
+          success: () => {
+            uni.navigateBack()
+          }
+        })
+        return
+      }
+      this.loadStatistics()
+    },
+
+    async loadStatistics() {
+      this.loading = true
+      try {
+        this.statistics = await getEarningsStatistics()
+      } catch (error) {
+        console.error('获取收益统计失败:', error)
+        uni.showToast({
+          title: '加载失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    goToWithdrawal() {
+      uni.navigateTo({
+        url: '/pages/runner/withdrawal'
+      })
+    },
+
+    goToDetails() {
+      uni.navigateTo({
+        url: '/pages/runner/earnings-details'
+      })
+    },
+
+    goToWithdrawalRecords() {
+      uni.navigateTo({
+        url: '/pages/runner/withdrawal-records'
+      })
+    }
+  }
+}
+</script>
+
+<style scoped>
+.earnings-container {
+  min-height: 100vh;
+  background: #f9fafb;
+}
+
+/* 导航栏 */
+.navbar {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.placeholder {
+  width: 64rpx;
+}
+
+/* 加载中 */
+.loading-wrapper {
+  padding: 200rpx 0;
+  display: flex;
+  justify-content: center;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 内容区域 */
+.content {
+  padding: 30rpx;
+}
+
+/* 总收益卡片 */
+.total-card {
+  padding: 40rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  border-radius: 20rpx;
+  margin-bottom: 30rpx;
+}
+
+.total-label {
+  display: block;
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 20rpx;
+}
+
+.total-amount {
+  display: block;
+  font-size: 60rpx;
+  font-weight: bold;
+  color: #ffffff;
+  margin-bottom: 30rpx;
+}
+
+.total-info {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 30rpx;
+  border-top: 1rpx solid rgba(255, 255, 255, 0.3);
+}
+
+.info-item {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.info-label {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.info-value {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.info-divider {
+  width: 1rpx;
+  height: 60rpx;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* 收益详情：横向三项 */
+.detail-row-card {
+  margin-bottom: 30rpx;
+  padding: 28rpx 20rpx;
+  background: #ffffff;
+  border-radius: 18rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.detail-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.detail-label {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.detail-amount {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #111827;
+}
+
+.detail-divider {
+  width: 1rpx;
+  height: 60rpx;
+  background: #e5e7eb;
+}
+
+/* 操作按钮 */
+.action-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.action-btn {
+  height: 90rpx;
+  border-radius: 45rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+}
+
+.action-btn.secondary {
+  background: #ffffff;
+  border: 2rpx solid #2563eb;
+}
+
+.action-btn.primary .btn-text {
+  color: #ffffff;
+}
+
+.action-btn.secondary .btn-text {
+  color: #2563eb;
+}
+
+.btn-text {
+  font-size: 30rpx;
+  font-weight: bold;
+}
+</style>
+

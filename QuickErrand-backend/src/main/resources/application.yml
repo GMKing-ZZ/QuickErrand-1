@@ -1,0 +1,81 @@
+server:
+  port: 8088
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: quickerrand-backend
+
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+
+  # 静态资源配置
+  resources:
+    static-locations: classpath:/META-INF/resources/,classpath:/resources/,classpath:/static/,classpath:/public/,file:${file.upload.path}
+
+  # 数据源配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/quick_errand?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: 1234
+
+  # Redis配置
+  redis:
+    host: localhost
+    port: 6379
+    password:
+    database: 0
+    timeout: 3000
+    lettuce:
+      pool:
+        max-active: 8
+        max-wait: -1
+        max-idle: 8
+        min-idle: 0
+
+  # 文件上传配置
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# MyBatis Plus配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.quickerrand.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# JWT配置
+jwt:
+  secret: quickerrand-secret-key-2026
+  expiration: 604800
+
+# 文件上传路径
+file:
+  upload:
+    path: e:/QuickErrand/uploads
+    url-prefix: http://localhost:8088/api
+
+# 订单费用配置（可调参：改配置后重启生效）
+quickerrand:
+  fee:
+    # 基础费用（元）
+    base-price: 5.00
+    # 每公里费用（元/公里）
+    price-per-km: 2.00
+    # 平台抽成比例（0-1）
+    platform-rate: 0.10
+    # 金额保留小数位
+    scale: 2
+

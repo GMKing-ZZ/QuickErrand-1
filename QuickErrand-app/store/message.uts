@@ -1,0 +1,80 @@
+/**
+ * 消息状态管理 - 用于全局未读消息提示
+ */
+import { getUnreadStats } from '@/common/api/message.uts'
+import type { UnreadCountInfo } from '@/common/api/message.uts'
+
+type MessageStateType = {
+  messageUnread: number
+  chatUnread: number
+  totalUnread: number
+  lastFetchTime: number
+}
+
+export const messageState = reactive({
+  messageUnread: 0,
+  chatUnread: 0,
+  totalUnread: 0,
+  lastFetchTime: 0
+} as MessageStateType)
+
+let fetchTimer: number | null = null
+
+/**
+ * 刷新未读消息统计
+ */
+export const refreshUnreadCount = async () => {
+  try {
+    const stats = await getUnreadStats()
+    messageState.messageUnread = stats.messageUnread
+    messageState.chatUnread = stats.chatUnread
+    messageState.totalUnread = stats.totalUnread
+    messageState.lastFetchTime = Date.now()
+  } catch (error) {
+    console.error('获取未读消息统计失败:', error)
+  }
+}
+
+/**
+ * 开始定时刷新未读消息（每60秒刷新一次）
+ */
+export const startUnreadPolling = () => {
+  if (fetchTimer !== null) {
+    return
+  }
+  refreshUnreadCount()
+  fetchTimer = setInterval(() => {
+    refreshUnreadCount()
+  }, 60000) as unknown as number
+}
+
+/**
+ * 停止定时刷新未读消息
+ */
+export const stopUnreadPolling = () => {
+  if (fetchTimer !== null) {
+    clearInterval(fetchTimer)
+    fetchTimer = null
+  }
+}
+
+/**
+ * 清除未读消息计数（用于本地标记已读后更新）
+ */
+export const clearMessageUnread = () => {
+  messageState.messageUnread = 0
+  messageState.totalUnread = messageState.chatUnread
+}
+
+export const clearChatUnread = () => {
+  messageState.chatUnread = 0
+  messageState.totalUnread = messageState.messageUnread
+}
+
+/**
+ * 减少聊天未读数
+ */
+export const decreaseChatUnread = (count: number) => {
+  messageState.chatUnread = Math.max(0, messageState.chatUnread - count)
+  messageState.totalUnread = Math.max(0, messageState.totalUnread - count)
+}

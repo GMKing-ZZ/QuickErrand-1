@@ -1,0 +1,158 @@
+:root {
+  --qe-bg: #ffffff;
+  --qe-bg-2: #fafbfc;
+  --qe-bg-3: #f5f7fa;
+  --qe-surface: #f8f9fb;
+  --qe-surface-2: #f0f2f5;
+  --qe-surface-3: #e8ecf1;
+  --qe-border: #e4e7ed;
+  --qe-border-light: #ebeef5;
+  --qe-border-lighter: #f2f6fc;
+  --qe-text: #1f2937;
+  --qe-text-secondary: #4b5563;
+  --qe-text-muted: #6b7280;
+  --qe-text-placeholder: #9ca3af;
+  --qe-text-disabled: #c0c4cc;
+
+  --qe-primary: #3b82f6;
+  --qe-primary-light: #60a5fa;
+  --qe-primary-lighter: #93c5fd;
+  --qe-primary-light-bg: #eff6ff;
+  --qe-primary-dark: #2563eb;
+  --qe-primary-darker: #1d4ed8;
+  --qe-primary-gradient: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  --qe-primary-gradient-light: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  --qe-primary-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);
+  --qe-primary-shadow-hover: 0 6px 20px rgba(59, 130, 246, 0.35);
+
+  --qe-success: #10b981;
+  --qe-success-light: #34d399;
+  --qe-success-lighter: #6ee7b7;
+  --qe-success-light-bg: #ecfdf5;
+  --qe-success-dark: #059669;
+  --qe-success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+
+  --qe-warning: #f59e0b;
+  --qe-warning-light: #fbbf24;
+  --qe-warning-lighter: #fcd34d;
+  --qe-warning-light-bg: #fffbeb;
+  --qe-warning-dark: #d97706;
+  --qe-warning-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+
+  --qe-danger: #ef4444;
+  --qe-danger-light: #f87171;
+  --qe-danger-lighter: #fca5a5;
+  --qe-danger-light-bg: #fef2f2;
+  --qe-danger-dark: #dc2626;
+  --qe-danger-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+
+  --qe-info: #06b6d4;
+  --qe-info-light: #22d3ee;
+  --qe-info-lighter: #67e8f9;
+  --qe-info-light-bg: #ecfeff;
+  --qe-info-dark: #0891b2;
+  --qe-info-gradient: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);
+
+  --qe-purple: #8b5cf6;
+  --qe-purple-light: #a78bfa;
+  --qe-purple-light-bg: #f5f3ff;
+  --qe-purple-gradient: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+
+  --qe-radius-xs: 4px;
+  --qe-radius-sm: 6px;
+  --qe-radius-md: 8px;
+  --qe-radius-lg: 12px;
+  --qe-radius-xl: 16px;
+  --qe-radius-2xl: 20px;
+  --qe-radius-full: 9999px;
+
+  --qe-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --qe-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --qe-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+  --qe-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+  --qe-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  --qe-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+  --qe-shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.04);
+  --qe-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --qe-shadow-card-hover: 0 8px 25px rgba(0, 0, 0, 0.08);
+  --qe-shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --qe-shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.16);
+
+  --qe-transition-fast: 0.15s ease;
+  --qe-transition-base: 0.25s ease;
+  --qe-transition-slow: 0.35s ease;
+  --qe-transition-bounce: 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  --qe-sidebar-width: 240px;
+  --qe-sidebar-collapsed-width: 72px;
+  --qe-header-height: 56px;
+}
+
+body {
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--qe-border);
+  border-radius: var(--qe-radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--qe-text-muted);
+}
+
+::selection {
+  background: var(--qe-primary-light-bg);
+  color: var(--qe-primary-dark);
+}
+
+/* 黑暗模式 */
+html.dark {
+  --qe-bg: #121212;
+  --qe-bg-2: #1e1e1e;
+  --qe-bg-3: #252525;
+  --qe-surface: #2d2d2d;
+  --qe-surface-2: #333333;
+  --qe-surface-3: #3a3a3a;
+  --qe-border: #404040;
+  --qe-border-light: #4a4a4a;
+  --qe-border-lighter: #555555;
+  --qe-text: #e0e0e0;
+  --qe-text-secondary: #b0b0b0;
+  --qe-text-muted: #909090;
+  --qe-text-placeholder: #707070;
+  --qe-text-disabled: #505050;
+
+  --qe-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --qe-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+  --qe-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --qe-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --qe-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+  --qe-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  --qe-shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.3);
+  --qe-shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --qe-shadow-card-hover: 0 8px 25px rgba(0, 0, 0, 0.4);
+  --qe-shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --qe-shadow-modal: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+html.dark body {
+  background: linear-gradient(135deg, #121212 0%, #1e1e1e 100%);
+}
+
+html.dark .el-main {
+  background: linear-gradient(135deg, #121212 0%, #1e1e1e 100%);
+}

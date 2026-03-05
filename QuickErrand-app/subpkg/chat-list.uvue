@@ -1,0 +1,390 @@
+<template>
+  <view class="chat-list-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view v-if="!showRunnerTab" class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="nav-title">消息</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 加载中 -->
+    <view v-if="loading" class="loading-wrapper">
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <!-- 空状态 -->
+    <view v-else-if="contacts.length === 0" class="empty-wrapper">
+      <text class="empty-icon">💬</text>
+      <text class="empty-text">暂无聊天消息</text>
+      <text class="empty-sub">可从订单详情页选择"在线联系"发起聊天</text>
+    </view>
+
+    <!-- 联系人列表 -->
+    <scroll-view v-else class="list-scroll" scroll-y enable-back-to-top>
+      <view
+        v-for="item in contacts"
+        :key="item.contactId"
+        class="contact-item"
+        @click="openContactConversations(item)"
+      >
+        <view class="avatar-wrapper">
+          <image
+            v-if="item.avatar"
+            class="avatar-image"
+            :src="item.avatar"
+            mode="aspectFill"
+          />
+          <view v-else class="avatar-placeholder">
+            <text class="avatar-text">{{ (item.nickname || '聊').charAt(0) }}</text>
+          </view>
+        </view>
+        <view class="contact-main">
+          <view class="contact-top">
+            <text class="contact-name">{{ item.nickname || '对方' }}</text>
+            <text class="time-text" v-if="item.lastTime">{{ formatTime(item.lastTime) }}</text>
+          </view>
+          <view class="contact-bottom">
+            <text class="last-msg" :class="{ 'last-msg-empty': !item.lastContent }">
+              {{ formatLastContent(item.lastContent) }}
+            </text>
+            <view v-if="item.unreadCount > 0" class="unread-badge">
+              <text class="unread-text">
+                {{ item.unreadCount > 99 ? '99+' : String(item.unreadCount) }}
+              </text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+
+    <!-- 跑腿员底部导航 -->
+    <RunnerTabBar v-if="showRunnerTab" active="message" />
+  </view>
+</template>
+
+<script>
+import type { ChatContact } from '@/common/api/chat.uts'
+import { getChatContacts } from '@/common/api/chat.uts'
+import RunnerTabBar from '@/components/RunnerTabBar.uvue'
+import { refreshUnreadCount } from '@/store/message.uts'
+
+export default {
+  components: {
+    RunnerTabBar
+  },
+  data() {
+    return {
+      loading: true,
+      contacts: [] as ChatContact[],
+      fromRunnerTab: false
+    }
+  },
+  onLoad(options: any) {
+    try {
+      const flag = options && options.fromRunnerTab
+      if (flag === '1' || flag === 1 || flag === true || flag === 'true') {
+        this.fromRunnerTab = true
+      }
+    } catch (e) {
+      console.error('解析聊天列表入口参数失败:', e)
+    }
+    this.loadContacts()
+  },
+  onShow() {
+    this.loadContacts()
+    refreshUnreadCount()
+  },
+  computed: {
+    showRunnerTab(): boolean {
+      return this.fromRunnerTab
+    }
+  },
+  methods: {
+    goBack() {
+      // @ts-ignore
+      const pages = getCurrentPages && getCurrentPages()
+      if (pages && pages.length > 1) {
+        uni.navigateBack()
+      } else {
+        uni.switchTab({
+          url: '/pages/order/list'
+        })
+      }
+    },
+
+    async loadContacts() {
+      this.loading = true
+      try {
+        const list = await getChatContacts()
+        this.contacts = list || []
+      } catch (error) {
+        console.error('获取联系人列表失败:', error)
+        uni.showToast({
+          title: '加载失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    openContactConversations(item: ChatContact) {
+      if (!item || !item.contactId) return
+      uni.navigateTo({
+        url: `/subpkg/contact-conversations?contactId=${item.contactId}&nickname=${encodeURIComponent(item.nickname || '对方')}&avatar=${encodeURIComponent(item.avatar || '')}`
+      })
+    },
+
+    formatTime(ts: number): string {
+      if (!ts) return ''
+      const time = new Date(ts)
+      const now = new Date()
+      const diff = now.getTime() - time.getTime()
+
+      if (diff < 60000) {
+        return '刚刚'
+      }
+      if (diff < 3600000) {
+        return Math.floor(diff / 60000) + '分钟前'
+      }
+
+      const todayStr = now.toDateString()
+      const timeStr = time.toDateString()
+      if (timeStr === todayStr) {
+        const h = time.getHours()
+        const m = String(time.getMinutes()).padStart(2, '0')
+        return `${h}:${m}`
+      }
+
+      const yesterday = new Date(now)
+      yesterday.setDate(yesterday.getDate() - 1)
+      if (timeStr === yesterday.toDateString()) {
+        const h = time.getHours()
+        const m = String(time.getMinutes()).padStart(2, '0')
+        return `昨天 ${h}:${m}`
+      }
+
+      const month = time.getMonth() + 1
+      const date = time.getDate()
+      return `${month}-${date}`
+    },
+
+    formatLastContent(content: string): string {
+      if (!content) return '暂无聊天记录'
+      if (this.isImageUrl(content)) return '[图片]'
+      return content
+    },
+
+    isImageUrl(url: string): boolean {
+      if (!url) return false
+      const lower = url.toLowerCase()
+      return lower.match(/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i) !== null ||
+             lower.includes('/image') ||
+             lower.includes('/images') ||
+             lower.includes('/upload')
+    }
+  }
+}
+</script>
+
+<style scoped>
+.chat-list-container {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+.navbar {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  padding-top: calc(60rpx + env(safe-area-inset-top));
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.placeholder {
+  width: 64rpx;
+}
+
+.loading-wrapper {
+  padding: 200rpx 0;
+  display: flex;
+  justify-content: center;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+.empty-wrapper {
+  padding: 200rpx 40rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+}
+
+.empty-text {
+  font-size: 30rpx;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.empty-sub {
+  font-size: 24rpx;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.list-scroll {
+  padding: 16rpx 20rpx;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 30rpx);
+  box-sizing: border-box;
+}
+
+.contact-item {
+  flex-direction: row;
+  display: flex;
+  padding: 20rpx 16rpx;
+  margin-bottom: 16rpx;
+  background: #ffffff;
+  border-radius: 18rpx;
+  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.06);
+}
+
+.avatar-wrapper {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 40rpx;
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  margin-right: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 40rpx;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 40rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-text {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.contact-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.contact-top {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8rpx;
+}
+
+.contact-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #111827;
+  max-width: 360rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.time-text {
+  font-size: 22rpx;
+  color: #9ca3af;
+  margin-left: 12rpx;
+  flex-shrink: 0;
+}
+
+.contact-bottom {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-top: 4rpx;
+}
+
+.last-msg {
+  flex: 1;
+  font-size: 26rpx;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.last-msg-empty {
+  color: #9ca3af;
+}
+
+.unread-badge {
+  margin-left: 12rpx;
+  min-width: 32rpx;
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.unread-text {
+  font-size: 22rpx;
+  color: #ffffff;
+}
+</style>

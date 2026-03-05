@@ -1,0 +1,1802 @@
+<template>
+  <view class="create-order-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="nav-title">{{ navTitle }}</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 订单信息 -->
+    <view class="order-content">
+      <!-- 取件地址 -->
+      <view class="section">
+        <view class="section-title">
+          <text class="title-text">取件地址</text>
+        </view>
+        <view class="address-form-card">
+          <view class="form-item">
+            <text class="form-label">联系人</text>
+            <input
+              class="form-input"
+              v-model="pickupForm.contactName"
+              placeholder="请输入联系人姓名"
+              maxlength="20"
+            />
+          </view>
+          <view class="form-item">
+            <text class="form-label">联系电话</text>
+            <input
+              class="form-input"
+              v-model="pickupForm.contactPhone"
+              placeholder="请输入联系电话"
+              type="number"
+              maxlength="11"
+            />
+          </view>
+          <view class="form-item">
+            <text class="form-label">所在地区</text>
+            <picker
+              mode="region"
+              :value="pickupForm.region"
+              @change="onPickupRegionChange"
+            >
+              <view class="picker-view">
+                <text v-if="pickupForm.province" class="picker-text">
+                  {{ pickupForm.province }} {{ pickupForm.city }} {{ pickupForm.district }}
+                </text>
+                <text v-else class="picker-placeholder">请选择省市区</text>
+                <text class="arrow-icon">›</text>
+              </view>
+            </picker>
+          </view>
+          <view class="form-item">
+            <text class="form-label">详细地址</text>
+            <textarea
+              class="form-textarea"
+              v-model="pickupForm.detailAddress"
+              placeholder="请输入详细地址"
+              maxlength="200"
+            ></textarea>
+          </view>
+          <view class="form-item" @click="choosePickupLocation">
+            <text class="form-label">选择位置</text>
+            <view class="picker-view">
+              <text v-if="pickupForm.latitude && pickupForm.longitude" class="picker-text">
+                已选择位置
+              </text>
+              <text v-else class="picker-placeholder">点击选择地图位置</text>
+              <text class="arrow-icon">›</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 送达地址 -->
+      <view class="section">
+        <view class="section-title">
+          <text class="title-text">送达地址</text>
+        </view>
+        <view class="address-card" @click="selectDeliveryAddress">
+          <view v-if="deliveryAddress" class="address-info">
+            <view class="address-header">
+              <view class="contact-row">
+                <text class="contact-name">{{ deliveryAddress.contactName }}</text>
+                <text class="contact-phone">{{ deliveryAddress.contactPhone }}</text>
+                <view v-if="deliveryAddress.isDefault === 1" class="default-tag">
+                  <text class="default-text">默认</text>
+                </view>
+              </view>
+              <text class="address-detail">
+                {{ deliveryAddress.province }} {{ deliveryAddress.city }} {{ deliveryAddress.district }} {{ deliveryAddress.detailAddress }}
+              </text>
+            </view>
+            <text class="arrow-icon">›</text>
+          </view>
+          <view v-else class="address-placeholder">
+            <text class="placeholder-text">请选择送达地址</text>
+            <text class="arrow-icon">›</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 距离和费用 -->
+      <view v-if="isPickupFormValid() && deliveryAddress" class="fee-section">
+        <view class="fee-item">
+          <text class="fee-label">配送距离</text>
+          <text class="fee-value">{{ distance.toFixed(2) }} km</text>
+        </view>
+        <view class="fee-item">
+          <text class="fee-label">配送费用</text>
+          <text class="fee-value price">¥{{ totalFee.toFixed(2) }}</text>
+        </view>
+        <view class="fee-item custom-amount-item">
+          <text class="fee-label">自定义金额</text>
+          <view class="custom-amount-input-wrapper">
+            <text class="currency-symbol">¥</text>
+            <input
+              class="custom-amount-input"
+              type="digit"
+              v-model="customAmount"
+              placeholder="0.00"
+              @input="onCustomAmountChange"
+            />
+          </view>
+        </view>
+      </view>
+
+      <!-- 物品信息 -->
+      <view class="section">
+        <view class="section-title">
+          <text class="title-text">物品信息</text>
+        </view>
+        <view class="item-info-card">
+          <view class="form-item">
+            <text class="form-label">物品描述</text>
+            <textarea
+              class="form-textarea"
+              v-model="itemDescription"
+              placeholder="请输入物品描述（选填）"
+              maxlength="500"
+            ></textarea>
+            <text class="char-count">{{ itemDescription.length }}/500</text>
+          </view>
+          <view class="form-item">
+            <text class="form-label">物品图片</text>
+            <view class="image-upload-container">
+              <view class="image-list">
+                <view
+                  v-for="(image, index) in itemImages"
+                  :key="index"
+                  class="image-item"
+                >
+                  <image
+                    class="uploaded-image"
+                    :src="image"
+                    mode="aspectFill"
+                    @click="previewImage(index)"
+                  ></image>
+                  <view class="delete-btn" @click="deleteImage(index)">
+                    <text class="delete-icon">×</text>
+                  </view>
+                </view>
+                <view
+                  v-if="itemImages.length < 9"
+                  class="upload-btn"
+                  @click="chooseImage"
+                >
+                  <text class="upload-icon">+</text>
+                  <text class="upload-text">上传图片</text>
+                </view>
+              </view>
+              <text class="upload-tip">最多上传9张图片（选填）</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 备注 -->
+      <view class="section">
+        <view class="section-title">
+          <text class="title-text">备注信息</text>
+        </view>
+        <view class="remark-card">
+          <textarea
+            class="remark-input"
+            v-model="remark"
+            placeholder="请输入备注信息（选填）"
+            maxlength="200"
+          ></textarea>
+          <text class="char-count">{{ remark.length }}/200</text>
+        </view>
+      </view>
+
+      <!-- 支付方式 -->
+      <view class="section">
+        <view class="section-title">
+          <text class="title-icon">💳</text>
+          <text class="title-text">支付方式</text>
+        </view>
+        <view class="payment-methods">
+          <view
+            class="payment-item"
+            :class="{ active: paymentMethod === 1 }"
+            @click="selectPaymentMethod(1)"
+          >
+            <view class="payment-left">
+              <image class="payment-icon" src="/static/weixinzhifu.png" mode="aspectFit"></image>
+              <text class="payment-name">微信支付</text>
+            </view>
+            <view class="radio" :class="{ checked: paymentMethod === 1 }"></view>
+          </view>
+          <view
+            class="payment-item"
+            :class="{ active: paymentMethod === 2 }"
+            @click="selectPaymentMethod(2)"
+          >
+            <view class="payment-left">
+              <image class="payment-icon" src="/static/yinlian.png" mode="aspectFit"></image>
+              <text class="payment-name">银行卡支付</text>
+            </view>
+            <view class="radio" :class="{ checked: paymentMethod === 2 }"></view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 收货码设置 -->
+      <view class="section">
+        <view class="section-title">
+          <text class="title-icon">🔐</text>
+          <text class="title-text">收货码</text>
+        </view>
+        <view class="pickup-code-card">
+          <view class="pickup-code-info">
+            <text class="pickup-code-label">开启收货码</text>
+            <text class="pickup-code-desc">开启后，跑腿员送达时需要输入收货码才能完成订单</text>
+          </view>
+          <switch :checked="enablePickupCode" @change="onPickupCodeChange" color="#2563eb" />
+        </view>
+      </view>
+    </view>
+
+    <!-- 底部提交按钮 -->
+    <view class="submit-section">
+      <view class="price-info">
+        <text class="price-label">实付金额</text>
+        <text class="price-amount">¥{{ getFinalAmount().toFixed(2) }}</text>
+      </view>
+      <button class="submit-btn" @click="handleSubmit" :loading="submitting">
+        <text class="btn-text">立即下单</text>
+      </button>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getOrderTypes, calculateFee, createOrder } from '@/common/api/order.uts'
+import type { OrderTypeInfo, CreateOrderParams } from '@/common/api/order.uts'
+import type { AddressInfo } from '@/common/api/address.uts'
+import { getAddressList } from '@/common/api/address.uts'
+import { getUserInfo } from '@/common/api/user.uts'
+import { MAP_CONFIG } from '@/common/config/map.uts'
+import { upload } from '@/common/utils/request.uts'
+
+export default {
+  data() {
+    return {
+      orderTypeId: 0,
+      orderTypeName: '',
+      orderType: null as OrderTypeInfo | null,
+      navTitle: '下单',
+      pickupForm: {
+        contactName: '',
+        contactPhone: '',
+        province: '',
+        city: '',
+        district: '',
+        detailAddress: '',
+        region: [] as string[],
+        latitude: '',
+        longitude: ''
+      },
+      deliveryAddress: null as AddressInfo | null,
+      distance: 0,
+      totalFee: 0,
+      customAmount: '0',
+      itemDescription: '',
+      itemImages: [] as string[],
+      remark: '',
+      paymentMethod: 1,
+      enablePickupCode: true,
+      submitting: false
+    }
+  },
+  onLoad(options) {
+    if (options.orderTypeId) {
+      this.orderTypeId = parseInt(options.orderTypeId)
+      this.loadOrderType()
+    }
+    // 加载默认地址
+    this.loadDefaultAddress()
+    // 加载用户收货码默认设置
+    this.loadUserPickupCodeSetting()
+    // 监听地址选择事件（在onLoad中设置，确保页面加载时就监听）
+    uni.$on('addressSelected', this.handleAddressSelected)
+  },
+  onShow() {
+    // 确保事件监听器存在（防止被移除后未重新绑定）
+    uni.$off('addressSelected', this.handleAddressSelected)
+    uni.$on('addressSelected', this.handleAddressSelected)
+  },
+  onUnload() {
+    // 页面卸载时移除事件监听
+    uni.$off('addressSelected', this.handleAddressSelected)
+  },
+  methods: {
+    async loadOrderType() {
+      try {
+        console.log('开始加载订单类型, orderTypeId:', this.orderTypeId)
+        const types = await getOrderTypes()
+        console.log('获取到的订单类型列表:', types)
+        this.orderType = types.find((item: OrderTypeInfo) => item.id === this.orderTypeId) || null
+        console.log('找到的订单类型:', this.orderType)
+        if (this.orderType) {
+          this.orderTypeName = this.orderType.typeName
+          this.totalFee = this.orderType.basePrice || 0
+          // 更新导航标题
+          if (this.orderType.typeName && this.orderType.typeName !== '下单') {
+            this.navTitle = `${this.orderType.typeName}下单`
+          } else {
+            this.navTitle = '下单'
+          }
+          console.log('设置 orderTypeName:', this.orderTypeName)
+          console.log('更新 navTitle:', this.navTitle)
+        } else {
+          console.warn('未找到对应的订单类型, orderTypeId:', this.orderTypeId)
+          this.navTitle = '下单'
+        }
+      } catch (error) {
+        console.error('获取订单类型失败:', error)
+        this.navTitle = '下单'
+      }
+    },
+
+    async loadDefaultAddress() {
+      try {
+        const addressList = await getAddressList()
+        // 查找默认地址（isDefault === 1）
+        const defaultAddress = addressList.find((addr: AddressInfo) => addr.isDefault === 1)
+        if (defaultAddress) {
+          this.deliveryAddress = defaultAddress
+          console.log('已加载默认地址:', defaultAddress)
+          // 如果取件地址已填写，计算距离和费用
+          if (this.isPickupFormValid()) {
+            this.calculateDistance()
+          }
+        } else {
+          console.log('用户没有默认地址')
+        }
+      } catch (error) {
+        console.error('获取默认地址失败:', error)
+      }
+    },
+
+    async loadUserPickupCodeSetting() {
+      try {
+        const userInfo = await getUserInfo()
+        if (userInfo.pickupCodeEnabled !== null && userInfo.pickupCodeEnabled !== undefined) {
+          this.enablePickupCode = userInfo.pickupCodeEnabled === 1
+        }
+      } catch (error) {
+        console.error('获取用户收货码设置失败:', error)
+      }
+    },
+
+    goBack() {
+      uni.navigateBack()
+    },
+
+    onPickupRegionChange(e: any) {
+      const region = e.detail.value as string[]
+      const province = region[0] || ''
+      const city = region[1] || ''
+      const district = region[2] || ''
+      
+      // 检查是否为直辖市（北京市、天津市、重庆市、上海市）
+      const isMunicipality = province.includes('北京') || province.includes('天津') || 
+                             province.includes('重庆') || province.includes('上海')
+      
+      if (isMunicipality) {
+        // 直辖市：省名 = 市名
+        this.pickupForm.province = province
+        this.pickupForm.city = province
+        this.pickupForm.district = district
+        this.pickupForm.region = [province, province, district]
+      } else {
+        // 普通省份
+        this.pickupForm.province = province
+        this.pickupForm.city = city
+        this.pickupForm.district = district
+        this.pickupForm.region = region
+      }
+      
+      // 如果送达地址已选择，重新计算距离
+      if (this.deliveryAddress && this.isPickupFormValid()) {
+        this.calculateDistance()
+      }
+    },
+
+    isPickupFormValid(): boolean {
+      return !!(
+        this.pickupForm.contactName &&
+        this.pickupForm.contactPhone &&
+        this.pickupForm.province &&
+        this.pickupForm.city &&
+        this.pickupForm.district &&
+        this.pickupForm.detailAddress
+      )
+    },
+
+    getPickupAddress(): AddressInfo | null {
+      if (!this.isPickupFormValid()) {
+        return null
+      }
+      return {
+        id: 0,
+        contactName: this.pickupForm.contactName,
+        contactPhone: this.pickupForm.contactPhone,
+        province: this.pickupForm.province,
+        city: this.pickupForm.city,
+        district: this.pickupForm.district,
+        detailAddress: this.pickupForm.detailAddress,
+        longitude: this.pickupForm.longitude || '',
+        latitude: this.pickupForm.latitude || '',
+        isDefault: 0,
+        createTime: ''
+      }
+    },
+
+    choosePickupLocation() {
+      uni.chooseLocation({
+        success: (res) => {
+          console.log('选择取件位置成功:', res)
+          // 保存经纬度
+          this.pickupForm.latitude = res.latitude.toString()
+          this.pickupForm.longitude = res.longitude.toString()
+          
+          // 始终使用高德地图逆地理编码解析地址，获取准确的省市区信息
+          this.reverseGeocodePickup(res.latitude, res.longitude)
+          
+          // 重新计算距离
+          if (this.deliveryAddress && this.isPickupFormValid()) {
+            console.log('取件位置选择后，准备计算距离')
+            setTimeout(() => {
+              this.calculateDistance()
+            }, 100)
+          } else {
+            console.log('取件位置选择后，但送达地址未选择或取件信息不完整', {
+              hasDeliveryAddress: !!this.deliveryAddress,
+              isPickupFormValid: this.isPickupFormValid()
+            })
+          }
+        },
+        fail: (err) => {
+          console.error('选择位置失败:', err)
+          if (err.errMsg && !err.errMsg.includes('cancel')) {
+            uni.showToast({
+              title: '选择位置失败，请重试',
+              icon: 'none',
+              duration: 2000
+            })
+          }
+        }
+      })
+    },
+
+    // 逆地理编码：根据经纬度获取取件地址信息
+    reverseGeocodePickup(latitude: number, longitude: number) {
+      // 使用高德地图逆地理编码API
+      uni.showLoading({
+        title: '正在解析地址...',
+        mask: true
+      })
+      
+      // 高德地图API需要经纬度顺序为：经度,纬度
+      const location = `${longitude},${latitude}`
+      
+      // 从配置文件中获取高德地图key
+      const key = MAP_CONFIG.amapKey
+      
+      if (!key) {
+        uni.hideLoading()
+        uni.showToast({
+          title: '请配置高德地图Key',
+          icon: 'none',
+          duration: 2000
+        })
+        console.warn('高德地图Key未配置，请在manifest.json中配置web.sdkConfigs.maps.amap.key')
+        return
+      }
+      
+      uni.request({
+        url: 'https://restapi.amap.com/v3/geocode/regeo',
+        method: 'GET',
+        data: {
+          location: location,
+          key: key,
+          radius: 1000,
+          extensions: 'base'
+        },
+        success: (res: any) => {
+          console.log('取件地址高德地图逆地理编码结果:', res)
+          uni.hideLoading()
+          
+          if (res.data && res.data.status === '1' && res.data.regeocode) {
+            const regeocode = res.data.regeocode
+            this.parsePickupAddressFromAmapGeocode(regeocode)
+          } else {
+            console.warn('取件地址逆地理编码失败:', res.data)
+            uni.showToast({
+              title: res.data?.info || '地址解析失败',
+              icon: 'none',
+              duration: 2000
+            })
+          }
+        },
+        fail: (err) => {
+          console.error('取件地址逆地理编码请求失败:', err)
+          uni.hideLoading()
+          uni.showToast({
+            title: '网络错误，请检查网络',
+            icon: 'none',
+            duration: 2000
+          })
+        }
+      })
+    },
+
+    // 解析高德地图逆地理编码返回的取件地址信息
+    parsePickupAddressFromAmapGeocode(regeocode: any) {
+      console.log('解析取件地址高德地图逆地理编码结果:', regeocode)
+      
+      if (!regeocode) {
+        return
+      }
+
+      const addressComponent = regeocode.addressComponent
+      if (addressComponent) {
+        // 处理直辖市（北京市、天津市、重庆市、上海市）
+        const province = addressComponent.province || ''
+        let city = addressComponent.city || ''
+        const district = addressComponent.district || ''
+        
+        // 检查是否为直辖市
+        const isMunicipality = province.includes('北京') || province.includes('天津') || 
+                               province.includes('重庆') || province.includes('上海')
+        
+        if (isMunicipality) {
+          // 直辖市：省名 = 市名
+          this.pickupForm.province = province
+          this.pickupForm.city = province  // 市名与省名相同
+          this.pickupForm.district = district
+          
+          // 更新region用于picker显示
+          this.pickupForm.region = [province, province, district]
+        } else {
+          // 普通省份
+          this.pickupForm.province = province
+          this.pickupForm.city = city
+          this.pickupForm.district = district
+          
+          // 更新region用于picker显示（使用完整名称）
+          this.pickupForm.region = [province, city, district]
+        }
+        
+        // 设置详细地址
+        let detailAddress = ''
+        if (regeocode.formatted_address) {
+          detailAddress = regeocode.formatted_address
+          
+          // 去除省市区前缀，只保留详细地址部分
+          const province = this.pickupForm.province || ''
+          const city = this.pickupForm.city || ''
+          const district = this.pickupForm.district || ''
+          
+          // 去除省市区前缀
+          let cleanAddress = detailAddress
+          if (province && cleanAddress.startsWith(province)) {
+            cleanAddress = cleanAddress.substring(province.length)
+          }
+          if (city && cleanAddress.startsWith(city)) {
+            cleanAddress = cleanAddress.substring(city.length)
+          }
+          if (district && cleanAddress.startsWith(district)) {
+            cleanAddress = cleanAddress.substring(district.length)
+          }
+          
+          // 去除可能的空格和分隔符
+          cleanAddress = cleanAddress.trim()
+          
+          // 如果去除前缀后还有内容，使用去除前缀后的地址；否则使用完整地址
+          if (cleanAddress && cleanAddress.length > 0) {
+            this.pickupForm.detailAddress = cleanAddress
+          } else {
+            // 如果去除前缀后为空，尝试从addressComponent拼接详细地址
+            const parts: string[] = []
+            if (addressComponent.township) {
+              parts.push(addressComponent.township)
+            }
+            if (addressComponent.street) {
+              parts.push(addressComponent.street)
+            }
+            if (addressComponent.streetNumber) {
+              parts.push(addressComponent.streetNumber)
+            }
+            if (addressComponent.building) {
+              parts.push(addressComponent.building)
+            }
+            if (addressComponent.neighborhood) {
+              parts.push(addressComponent.neighborhood)
+            }
+            this.pickupForm.detailAddress = parts.length > 0 ? parts.join('') : detailAddress
+          }
+        } else {
+          // 如果没有formatted_address，从addressComponent拼接详细地址
+          const parts: string[] = []
+          if (addressComponent.township) {
+            parts.push(addressComponent.township)
+          }
+          if (addressComponent.street) {
+            parts.push(addressComponent.street)
+          }
+          if (addressComponent.streetNumber) {
+            parts.push(addressComponent.streetNumber)
+          }
+          if (addressComponent.building) {
+            parts.push(addressComponent.building)
+          }
+          if (addressComponent.neighborhood) {
+            parts.push(addressComponent.neighborhood)
+          }
+          this.pickupForm.detailAddress = parts.join('')
+        }
+        
+        uni.showToast({
+          title: '地址解析成功',
+          icon: 'success',
+          duration: 1500
+        })
+      } else if (regeocode.formatted_address) {
+        // 如果没有addressComponent，但有formatted_address，尝试解析
+        this.parsePickupAddressFromLocation({ address: regeocode.formatted_address })
+      }
+    },
+
+    parsePickupAddressFromLocation(locationRes: any) {
+      if (!locationRes.address) {
+        return
+      }
+
+      const address = locationRes.address
+      console.log('解析取件地址:', address)
+
+      // 使用正则表达式解析省市区
+      // 匹配格式：省/市/自治区/特别行政区 + 市/地区/自治州/盟 + 区/县/市/旗 + 详细地址
+      const fullMatch = address.match(/^(.+?[省市区县]|.+?自治区|.+?特别行政区)(.+?[市区县]|.+?地区|.+?自治州|.+?盟)?(.+?[区县市]|.+?旗)?(.*)$/)
+      
+      if (fullMatch) {
+        const province = fullMatch[1] || ''
+        const city = fullMatch[2] || ''
+        const district = fullMatch[3] || ''
+        let detailAddress = fullMatch[4] || ''
+
+        // 处理直辖市（北京、上海、天津、重庆）
+        if (province && (province.includes('北京') || province.includes('上海') || 
+            province.includes('天津') || province.includes('重庆'))) {
+          // 直辖市：省名 = 市名
+          this.pickupForm.province = province
+          this.pickupForm.city = province
+          
+          // 提取区
+          if (district) {
+            this.pickupForm.district = district
+            this.pickupForm.region = [province, province, district]
+          } else if (city && city !== province) {
+            // 如果city不是省名，可能是区名
+            this.pickupForm.district = city
+            this.pickupForm.region = [province, province, city]
+            detailAddress = city + detailAddress
+          } else {
+            this.pickupForm.region = [province, province, '']
+          }
+        } else {
+          // 普通省份
+          if (province) {
+            this.pickupForm.province = province
+          }
+          if (city) {
+            this.pickupForm.city = city
+          }
+          if (district) {
+            this.pickupForm.district = district
+          }
+          
+          // 更新region用于picker显示
+          this.pickupForm.region = [
+            this.pickupForm.province || '',
+            this.pickupForm.city || '',
+            this.pickupForm.district || ''
+          ]
+        }
+
+        // 设置详细地址
+        detailAddress = detailAddress.trim()
+        if (detailAddress) {
+          // 如果详细地址为空或需要更新，则设置
+          if (!this.pickupForm.detailAddress || this.pickupForm.detailAddress === address) {
+            this.pickupForm.detailAddress = detailAddress
+          }
+        } else if (locationRes.name) {
+          // 如果没有详细地址，使用位置名称
+          this.pickupForm.detailAddress = locationRes.name
+        }
+      } else {
+        // 如果正则匹配失败，尝试简单分割
+        // 使用空格或特定字符分割
+        const parts = address.split(/[\s省市区县]/)
+        if (parts.length >= 3) {
+          const provinceName = parts[0] + (address.includes('省') ? '省' : 
+                                            address.includes('市') && !address.includes('省') ? '市' : '')
+          
+          // 检查是否为直辖市
+          const isMunicipality = provinceName.includes('北京') || provinceName.includes('天津') || 
+                                 provinceName.includes('重庆') || provinceName.includes('上海')
+          
+          if (isMunicipality) {
+            // 直辖市：省名 = 市名
+            this.pickupForm.province = provinceName
+            this.pickupForm.city = provinceName
+            this.pickupForm.district = parts[2] + (address.includes('区') ? '区' : 
+                                                 address.includes('县') ? '县' : '')
+            this.pickupForm.region = [provinceName, provinceName, this.pickupForm.district]
+          } else {
+            // 普通省份
+            this.pickupForm.province = provinceName
+            this.pickupForm.city = parts[1] + '市'
+            this.pickupForm.district = parts[2] + (address.includes('区') ? '区' : 
+                                                   address.includes('县') ? '县' : '')
+            this.pickupForm.region = [this.pickupForm.province, this.pickupForm.city, this.pickupForm.district]
+          }
+          
+          // 剩余部分作为详细地址
+          const detailStart = this.pickupForm.province.length + this.pickupForm.city.length + this.pickupForm.district.length
+          const remaining = address.substring(detailStart).trim()
+          if (remaining && !this.pickupForm.detailAddress) {
+            this.pickupForm.detailAddress = remaining
+          }
+        } else {
+          // 如果无法解析，至少填充详细地址
+          if (!this.pickupForm.detailAddress) {
+            this.pickupForm.detailAddress = address
+          }
+        }
+      }
+
+      // 如果位置名称存在且详细地址为空，使用位置名称
+      if (locationRes.name && !this.pickupForm.detailAddress) {
+        this.pickupForm.detailAddress = locationRes.name
+      }
+    },
+
+    selectDeliveryAddress() {
+      uni.navigateTo({
+        url: '/subpkg/address-list?selectMode=delivery'
+      })
+    },
+
+    handleAddressSelected(data: any) {
+      console.log('handleAddressSelected 被调用, data:', data)
+      const { mode, address } = data
+      if (mode === 'delivery' && address) {
+        console.log('更新送达地址:', address)
+        console.log('送达地址经纬度:', {
+          latitude: address.latitude,
+          longitude: address.longitude
+        })
+        // 直接赋值，Vue会自动处理响应式更新
+        this.deliveryAddress = address
+        
+        // 使用 setTimeout 确保在下一个事件循环中执行，让视图先更新
+        setTimeout(() => {
+          // 检查取件地址是否已填写（包括经纬度）
+          const hasPickupLocation = this.pickupForm.latitude && this.pickupForm.longitude
+          const hasPickupInfo = this.isPickupFormValid()
+          
+          console.log('地址选择后检查:', {
+            hasPickupLocation,
+            hasPickupInfo,
+            hasDeliveryLocation: address.latitude && address.longitude
+          })
+          
+          // 如果取件地址已填写且有位置信息，计算距离和费用
+          if (hasPickupInfo && hasPickupLocation) {
+            this.calculateDistance()
+          } else if (!hasPickupLocation) {
+            console.warn('取件地址尚未选择位置，无法计算距离')
+          } else if (!address.latitude || !address.longitude) {
+            console.warn('送达地址缺少经纬度信息，无法精确计算距离')
+            // 即使没有经纬度，也尝试使用默认距离计算费用
+            this.distance = 5.0
+            this.calculateFeeAmount()
+          }
+        }, 100)
+      }
+    },
+
+    calculateDistance() {
+      // 简单计算两点距离（实际应该使用地图API）
+      const pickupAddr = this.getPickupAddress()
+      if (!pickupAddr || !this.deliveryAddress) {
+        console.log('calculateDistance: 取件地址或送达地址为空', {
+          pickupAddr: pickupAddr,
+          deliveryAddress: this.deliveryAddress
+        })
+        return
+      }
+
+      // 获取经纬度并转换为数字
+      const lat1Str = pickupAddr.latitude || ''
+      const lon1Str = pickupAddr.longitude || ''
+      const lat2Str = this.deliveryAddress.latitude || ''
+      const lon2Str = this.deliveryAddress.longitude || ''
+
+      const lat1 = parseFloat(lat1Str)
+      const lon1 = parseFloat(lon1Str)
+      const lat2 = parseFloat(lat2Str)
+      const lon2 = parseFloat(lon2Str)
+
+      console.log('calculateDistance: 经纬度信息', {
+        pickup: { lat: lat1Str, lon: lon1Str, latNum: lat1, lonNum: lon1 },
+        delivery: { lat: lat2Str, lon: lon2Str, latNum: lat2, lonNum: lon2 }
+      })
+
+      // 检查经纬度是否有效（不能是NaN、0或空）
+      const isValidLat1 = !isNaN(lat1) && lat1 !== 0 && lat1Str.trim() !== ''
+      const isValidLon1 = !isNaN(lon1) && lon1 !== 0 && lon1Str.trim() !== ''
+      const isValidLat2 = !isNaN(lat2) && lat2 !== 0 && lat2Str.trim() !== ''
+      const isValidLon2 = !isNaN(lon2) && lon2 !== 0 && lon2Str.trim() !== ''
+
+      if (!isValidLat1 || !isValidLon1 || !isValidLat2 || !isValidLon2) {
+        console.warn('calculateDistance: 经纬度无效，使用默认距离', {
+          isValidPickup: isValidLat1 && isValidLon1,
+          isValidDelivery: isValidLat2 && isValidLon2
+        })
+        // 如果经纬度无效，使用默认距离
+        this.distance = 5.0
+        this.calculateFeeAmount()
+        return
+      }
+
+      // 使用Haversine公式计算距离
+      const R = 6371 // 地球半径（公里）
+      const dLat = this.toRad(lat2 - lat1)
+      const dLon = this.toRad(lon2 - lon1)
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2)
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+      this.distance = R * c
+
+      console.log('calculateDistance: 计算完成', {
+        distance: this.distance
+      })
+
+      this.calculateFeeAmount()
+    },
+
+    toRad(value: number): number {
+      return value * Math.PI / 180
+    },
+
+    async calculateFeeAmount() {
+      try {
+        const fee = await calculateFee({
+          orderTypeId: this.orderTypeId,
+          distance: this.distance
+        })
+        this.totalFee = fee
+        // 自动填充自定义金额为计算出的费用
+        this.customAmount = fee.toFixed(2)
+      } catch (error) {
+        console.error('计算费用失败:', error)
+        // 使用本地计算作为备选
+        if (this.orderType) {
+          this.totalFee = this.orderType.basePrice + this.orderType.pricePerKm * this.distance
+          // 自动填充自定义金额为计算出的费用
+          this.customAmount = this.totalFee.toFixed(2)
+        }
+      }
+    },
+
+    onCustomAmountChange(e: any) {
+      // 用户修改自定义金额时的处理
+      let value = e.detail?.value || this.customAmount || ''
+      // 移除非数字字符（除了小数点）
+      value = value.replace(/[^\d.]/g, '')
+      // 确保只有一个小数点
+      const parts = value.split('.')
+      if (parts.length > 2) {
+        value = parts[0] + '.' + parts.slice(1).join('')
+      }
+      // 限制小数位数为2位
+      if (parts.length === 2 && parts[1].length > 2) {
+        value = parts[0] + '.' + parts[1].substring(0, 2)
+      }
+      // 如果为空或只有小数点，设置为0
+      if (value === '' || value === '.') {
+        value = '0'
+      }
+      // 如果以0开头但不是0.xx格式，处理前导0
+      if (value.length > 1 && value[0] === '0' && value[1] !== '.') {
+        value = value.substring(1)
+      }
+      this.customAmount = value
+    },
+
+    getFinalAmount(): number {
+      // 获取最终金额：如果用户修改了自定义金额且大于0，使用自定义金额；否则使用计算出的费用
+      const custom = parseFloat(this.customAmount)
+      if (!isNaN(custom) && custom > 0) {
+        return custom
+      }
+      // 如果自定义金额为0或无效，使用计算出的费用
+      return this.totalFee > 0 ? this.totalFee : 0
+    },
+
+    selectPaymentMethod(method: number) {
+      this.paymentMethod = method
+    },
+
+    onPickupCodeChange(e: any) {
+      this.enablePickupCode = e.detail.value
+    },
+
+    chooseImage() {
+      const maxCount = 9 - this.itemImages.length
+      if (maxCount <= 0) {
+        uni.showToast({
+          title: '最多上传9张图片',
+          icon: 'none'
+        })
+        return
+      }
+
+      uni.chooseImage({
+        count: maxCount,
+        sizeType: ['compressed'],
+        sourceType: ['album', 'camera'],
+        success: (res) => {
+          console.log('选择图片成功:', res)
+          // 上传图片到服务器
+          this.uploadImages(res.tempFilePaths)
+        },
+        fail: (err) => {
+          console.error('选择图片失败:', err)
+          if (err.errMsg && !err.errMsg.includes('cancel')) {
+            uni.showToast({
+              title: '选择图片失败',
+              icon: 'none'
+            })
+          }
+        }
+      })
+    },
+
+    async uploadImages(tempFilePaths: string[]) {
+      uni.showLoading({
+        title: '上传中...',
+        mask: true
+      })
+
+      try {
+        const uploadPromises = tempFilePaths.map((tempFilePath) => {
+          return new Promise<string>((resolve, reject) => {
+            upload('/file/upload/order-item', tempFilePath, {})
+              .then((url: string) => {
+                resolve(url)
+              })
+              .catch((err: any) => {
+                console.error('图片上传失败:', err)
+                reject(err)
+              })
+          })
+        })
+
+        const uploadedUrls = await Promise.all(uploadPromises)
+        this.itemImages.push(...uploadedUrls)
+        console.log('图片上传完成:', this.itemImages)
+      } catch (error) {
+        console.error('上传图片失败:', error)
+        uni.showToast({
+          title: '上传图片失败',
+          icon: 'none'
+        })
+      } finally {
+        uni.hideLoading()
+      }
+    },
+
+    deleteImage(index: number) {
+      this.itemImages.splice(index, 1)
+    },
+
+    previewImage(index: number) {
+      uni.previewImage({
+        urls: this.itemImages,
+        current: index
+      })
+    },
+
+    async handleSubmit() {
+      // 验证取件地址
+      if (!this.pickupForm.contactName) {
+        uni.showToast({
+          title: '请输入联系人姓名',
+          icon: 'none'
+        })
+        return
+      }
+      if (!this.pickupForm.contactPhone) {
+        uni.showToast({
+          title: '请输入联系电话',
+          icon: 'none'
+        })
+        return
+      }
+      if (!this.pickupForm.province || !this.pickupForm.city || !this.pickupForm.district) {
+        uni.showToast({
+          title: '请选择所在地区',
+          icon: 'none'
+        })
+        return
+      }
+      if (!this.pickupForm.detailAddress) {
+        uni.showToast({
+          title: '请输入详细地址',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (!this.deliveryAddress) {
+        uni.showToast({
+          title: '请选择送达地址',
+          icon: 'none'
+        })
+        return
+      }
+
+      // 验证取件地址经纬度（数据库要求必填）
+      if (!this.pickupForm.longitude || !this.pickupForm.latitude) {
+        uni.showToast({
+          title: '请选择取件位置',
+          icon: 'none'
+        })
+        return
+      }
+
+      // 验证送达地址经纬度（数据库要求必填）
+      if (!this.deliveryAddress.longitude || !this.deliveryAddress.latitude) {
+        uni.showToast({
+          title: '送达地址缺少位置信息，请重新选择',
+          icon: 'none'
+        })
+        return
+      }
+
+      this.submitting = true
+      try {
+        const pickupAddr = this.getPickupAddress()
+        if (!pickupAddr) {
+          uni.showToast({
+            title: '取件地址信息不完整',
+            icon: 'none'
+          })
+          this.submitting = false
+          return
+        }
+
+        // 获取最终金额
+        const finalAmount = this.getFinalAmount()
+        
+        // 创建订单
+        const orderData: CreateOrderParams = {
+          orderTypeId: this.orderTypeId,
+          pickupAddressId: 0, // 取件地址是临时填写的，没有ID
+          deliveryAddressId: this.deliveryAddress.id,
+          pickupContact: pickupAddr.contactName,
+          pickupPhone: pickupAddr.contactPhone,
+          pickupAddress: `${pickupAddr.province}${pickupAddr.city}${pickupAddr.district}${pickupAddr.detailAddress}`,
+          pickupLongitude: pickupAddr.longitude || '',
+          pickupLatitude: pickupAddr.latitude || '',
+          deliveryContact: this.deliveryAddress.contactName,
+          deliveryPhone: this.deliveryAddress.contactPhone,
+          deliveryAddress: `${this.deliveryAddress.province}${this.deliveryAddress.city}${this.deliveryAddress.district}${this.deliveryAddress.detailAddress}`,
+          deliveryLongitude: this.deliveryAddress.longitude || '',
+          deliveryLatitude: this.deliveryAddress.latitude || '',
+          distance: this.distance || 0,
+          itemDescription: this.itemDescription && this.itemDescription.trim() ? this.itemDescription.trim() : '',
+          itemImages: this.itemImages.length > 0 ? JSON.stringify(this.itemImages) : undefined,
+          customAmount: finalAmount > 0 ? finalAmount : undefined,
+          remark: this.remark,
+          paymentMethod: this.paymentMethod,
+          enablePickupCode: this.enablePickupCode
+        }
+
+        const orderId = await createOrder(orderData)
+
+        // 下单成功：仅创建订单，跳转到订单详情页（由详情页进行“立即支付”）
+        uni.showToast({
+          title: '下单成功',
+          icon: 'success'
+        })
+        setTimeout(() => {
+          uni.redirectTo({
+            url: `/subpkg/order-detail?orderId=${orderId}`
+          })
+        }, 800)
+      } catch (error) {
+        console.error('下单失败:', error)
+        uni.showToast({
+          title: '下单失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.submitting = false
+      }
+    },
+  }
+}
+</script>
+
+<style scoped>
+.create-order-container {
+  min-height: 100vh;
+  background: #f9fafb;
+  padding-bottom: 200rpx;
+}
+
+/* 导航栏 */
+.navbar {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 30rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  box-shadow: 0 4rpx 20rpx rgba(37, 99, 235, 0.15);
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10rpx);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.back-btn:active {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(0.95);
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+  font-weight: 300;
+  line-height: 64rpx;
+  display: block;
+  text-align: center;
+  margin: 0;
+  padding: 0;
+  height: 64rpx;
+  width: 100%;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 1rpx;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.placeholder {
+  width: 64rpx;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* 订单内容 */
+.order-content {
+  padding: 30rpx;
+}
+
+.section {
+  margin-bottom: 30rpx;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.title-text {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333333;
+}
+
+/* 地址卡片 */
+.address-card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+  transition: all 0.3s;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.address-card:active {
+  transform: translateY(-2rpx);
+  box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.12);
+}
+
+.address-info {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.address-header {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.contact-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12rpx;
+}
+
+.contact-name {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333333;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.contact-phone {
+  font-size: 28rpx;
+  color: #666666;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.default-tag {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 8rpx;
+  padding: 4rpx 12rpx;
+  flex-shrink: 0;
+}
+
+.default-text {
+  font-size: 22rpx;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.address-detail {
+  font-size: 28rpx;
+  color: #999999;
+  line-height: 1.6;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-all;
+}
+
+.address-placeholder {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.placeholder-text {
+  font-size: 28rpx;
+  color: #999999;
+  white-space: nowrap;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.arrow-icon {
+  font-size: 40rpx;
+  color: #cccccc;
+  flex-shrink: 0;
+  margin-left: 20rpx;
+  line-height: 1;
+}
+
+.address-info .arrow-icon {
+  margin-left: 20rpx;
+  align-self: center;
+}
+
+.picker-view .arrow-icon {
+  margin-left: 20rpx;
+  flex-shrink: 0;
+}
+
+/* 地址表单 */
+.address-form-card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+}
+
+.form-item {
+  margin-bottom: 32rpx;
+}
+
+.form-item:last-child {
+  margin-bottom: 0;
+}
+
+.form-label {
+  display: block;
+  font-size: 28rpx;
+  color: #333333;
+  font-weight: 500;
+  margin-bottom: 16rpx;
+}
+
+.form-input {
+  width: 100%;
+  height: 80rpx;
+  padding: 0 24rpx;
+  background: #f9fafb;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  color: #333333;
+  border: 1rpx solid #e5e7eb;
+  box-sizing: border-box;
+}
+
+.form-input:focus {
+  border-color: #2563eb;
+  background: #ffffff;
+}
+
+.picker-view {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  height: 80rpx;
+  padding: 0 24rpx;
+  background: #f9fafb;
+  border-radius: 16rpx;
+  border: 1rpx solid #e5e7eb;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.picker-text {
+  font-size: 28rpx;
+  color: #333333;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.picker-placeholder {
+  font-size: 28rpx;
+  color: #999999;
+  flex: 1;
+  white-space: nowrap;
+}
+
+.form-textarea {
+  width: 100%;
+  min-height: 120rpx;
+  padding: 20rpx 24rpx;
+  background: #f9fafb;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  color: #333333;
+  border: 1rpx solid #e5e7eb;
+  box-sizing: border-box;
+  line-height: 1.6;
+}
+
+.form-textarea:focus {
+  border-color: #2563eb;
+  background: #ffffff;
+}
+
+/* 费用信息 */
+.fee-section {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-radius: 24rpx;
+  padding: 32rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 4rpx 16rpx rgba(245, 158, 11, 0.15);
+  border: 1rpx solid rgba(245, 158, 11, 0.2);
+}
+
+.fee-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.fee-item:last-child {
+  margin-bottom: 0;
+}
+
+.custom-amount-item {
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid rgba(245, 158, 11, 0.2);
+}
+
+.custom-amount-input-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background: #ffffff;
+  border-radius: 12rpx;
+  padding: 0 20rpx;
+  border: 1rpx solid rgba(245, 158, 11, 0.3);
+  min-width: 200rpx;
+}
+
+.currency-symbol {
+  font-size: 28rpx;
+  color: #333333;
+  font-weight: 500;
+  margin-right: 8rpx;
+}
+
+.custom-amount-input {
+  flex: 1;
+  height: 60rpx;
+  font-size: 28rpx;
+  color: #333333;
+  text-align: right;
+}
+
+.fee-label {
+  font-size: 28rpx;
+  color: #666666;
+}
+
+.fee-value {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333333;
+}
+
+.fee-value.price {
+  color: #f97316;
+  font-size: 40rpx;
+}
+
+/* 物品信息 */
+.item-info-card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+}
+
+.image-upload-container {
+  width: 100%;
+}
+
+.image-list {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 20rpx;
+}
+
+.image-item {
+  position: relative;
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 16rpx;
+  overflow: hidden;
+}
+
+.uploaded-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 16rpx;
+}
+
+.delete-btn {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  width: 48rpx;
+  height: 48rpx;
+  background: #ef4444;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2rpx 8rpx rgba(239, 68, 68, 0.3);
+}
+
+.delete-icon {
+  font-size: 36rpx;
+  color: #ffffff;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.upload-btn {
+  width: 200rpx;
+  height: 200rpx;
+  background: #f9fafb;
+  border: 2rpx dashed #d1d5db;
+  border-radius: 16rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+}
+
+.upload-btn:active {
+  background: #f3f4f6;
+  border-color: #2563eb;
+}
+
+.upload-icon {
+  font-size: 60rpx;
+  color: #9ca3af;
+  font-weight: 300;
+  line-height: 1;
+  margin-bottom: 10rpx;
+}
+
+.upload-text {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.upload-tip {
+  display: block;
+  font-size: 24rpx;
+  color: #999999;
+  margin-top: 16rpx;
+}
+
+/* 备注 */
+.remark-card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+}
+
+.remark-input {
+  width: 100%;
+  min-height: 150rpx;
+  font-size: 28rpx;
+  color: #333333;
+  line-height: 1.6;
+}
+
+.char-count {
+  display: block;
+  text-align: right;
+  font-size: 24rpx;
+  color: #999999;
+  margin-top: 10rpx;
+}
+
+/* 支付方式 */
+.payment-methods {
+  background: #ffffff;
+  border-radius: 24rpx;
+  overflow: hidden;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+  display: flex;
+  flex-direction: row;
+}
+
+.payment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32rpx;
+  flex: 1;
+  transition: all 0.3s;
+  border-right: 1rpx solid #f3f4f6;
+}
+
+.payment-item:active {
+  background: #f9fafb;
+}
+
+.payment-item:last-child {
+  border-right: none;
+}
+
+.payment-item.active {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-top: 4rpx solid #2563eb;
+}
+
+.payment-left {
+  display: flex;
+  align-items: center;
+}
+
+.payment-icon {
+  width: 40rpx;
+  height: 40rpx;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.payment-name {
+  font-size: 30rpx;
+  color: #333333;
+}
+
+.radio {
+  width: 40rpx;
+  height: 40rpx;
+  border: 2rpx solid #cccccc;
+  border-radius: 50%;
+  position: relative;
+}
+
+.radio.checked {
+  border-color: #2563eb;
+  background: #ffffff;
+}
+
+.radio.checked::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 24rpx;
+  height: 24rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 50%;
+}
+
+/* 收货码设置 */
+.pickup-code-card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pickup-code-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  margin-right: 20rpx;
+}
+
+.pickup-code-label {
+  font-size: 30rpx;
+  color: #333333;
+  font-weight: 500;
+  margin-bottom: 8rpx;
+}
+
+.pickup-code-desc {
+  font-size: 24rpx;
+  color: #999999;
+  line-height: 1.4;
+}
+
+/* 底部提交 */
+.submit-section {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  padding: 30rpx;
+  box-shadow: 0 -4rpx 20rpx rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1rpx solid #e5e7eb;
+}
+
+.price-info {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.price-label {
+  font-size: 28rpx;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.price-amount {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #f97316;
+  white-space: nowrap;
+}
+
+.submit-btn {
+  flex-shrink: 0;
+  margin-left: 30rpx;
+  height: 100rpx;
+  min-width: 200rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  border-radius: 50rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.4);
+  transition: all 0.3s;
+}
+
+.submit-btn:active {
+  transform: scale(0.98);
+  box-shadow: 0 4rpx 16rpx rgba(37, 99, 235, 0.3);
+}
+
+.btn-text {
+  font-size: 32rpx;
+  color: #ffffff;
+  font-weight: 700;
+}
+</style>

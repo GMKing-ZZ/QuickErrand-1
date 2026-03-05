@@ -1,0 +1,315 @@
+<template>
+  <view class="confirm-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="nav-title">确认收货</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <view class="content">
+      <!-- 订单概要信息 -->
+      <view class="order-card" v-if="orderInfo">
+        <text class="order-no">订单号：{{ orderInfo.orderNo }}</text>
+        <text class="order-type">类型：{{ orderInfo.orderTypeName || '订单' }}</text>
+        <text class="order-route">
+          {{ orderInfo.pickupAddress }} → {{ orderInfo.deliveryAddress }}
+        </text>
+        <!-- 实付金额样式与订单详情页保持一致 -->
+        <text class="order-amount-label">
+          实付金额：
+          <text class="order-amount-value">¥{{ formatMoney(orderInfo.amount ?? 0) }}</text>
+        </text>
+      </view>
+
+      <!-- 输入收货码 -->
+      <view class="code-card" v-if="orderInfo && orderInfo.pickupCode">
+        <text class="code-label">请输入收货码</text>
+        <input
+          class="code-input"
+          v-model="pickupCode"
+          type="number"
+          placeholder="与用户提供的收货码保持一致"
+          maxlength="6"
+        />
+        <text class="code-tip">收货码由用户在订单详情页查看并提供给你</text>
+      </view>
+
+      <!-- 无收货码提示 -->
+      <view class="code-card" v-else-if="orderInfo && !orderInfo.pickupCode">
+        <text class="code-label">无需收货码</text>
+        <text class="code-tip">该订单未开启收货码，可直接确认收货</text>
+      </view>
+
+      <!-- 提交按钮 -->
+      <button class="confirm-btn" @click="handleConfirmReceive">
+        <text class="confirm-btn-text">确认收货</text>
+      </button>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getOrderDetail } from '@/common/api/order.uts'
+import { completeOrder } from '@/common/api/runner.uts'
+import { userState, checkIsRunner } from '@/store/user.uts'
+
+export default {
+  data() {
+    return {
+      orderId: 0,
+      loading: false,
+      orderInfo: null as any,
+      pickupCode: ''
+    }
+  },
+  computed: {
+    isRunner(): boolean {
+      return checkIsRunner()
+    },
+    currentUserId(): number | null {
+      return userState.userInfo?.id ?? null
+    }
+  },
+  onLoad(options) {
+    if (!this.isRunner) {
+      uni.showModal({
+        title: '提示',
+        content: '当前账号不是跑腿员，无法确认收货',
+        showCancel: false,
+        success: () => {
+          uni.navigateBack()
+        }
+      })
+      return
+    }
+
+    if (options && options.orderId) {
+      this.orderId = parseInt(options.orderId)
+      this.loadOrderInfo()
+    } else {
+      uni.showToast({
+        title: '订单ID缺失',
+        icon: 'none'
+      })
+      setTimeout(() => {
+        uni.navigateBack()
+      }, 800)
+    }
+  },
+  methods: {
+    goBack() {
+      uni.navigateBack()
+    },
+
+    async loadOrderInfo() {
+      try {
+        this.loading = true
+        const info = await getOrderDetail(this.orderId)
+        this.orderInfo = info
+
+        // 额外校验：必须是该订单的跑腿员且订单为服务中状态
+        if (!info.runnerId || info.runnerId !== this.currentUserId || info.status !== 3) {
+          uni.showModal({
+            title: '提示',
+            content: '仅订单当前跑腿员且订单为服务中状态时才能确认收货',
+            showCancel: false,
+            success: () => {
+              uni.navigateBack()
+            }
+          })
+        }
+      } catch (e) {
+        console.error('获取订单信息失败:', e)
+        uni.showToast({
+          title: '订单信息加载失败',
+          icon: 'none'
+        })
+        setTimeout(() => {
+          uni.navigateBack()
+        }, 800)
+      } finally {
+        this.loading = false
+      }
+    },
+
+    formatMoney(v: any): string {
+      const n = Number(v)
+      if (Number.isFinite(n)) return n.toFixed(2)
+      return '0.00'
+    },
+
+    async handleConfirmReceive() {
+      // 如果订单有收货码，需要验证
+      if (this.orderInfo && this.orderInfo.pickupCode) {
+        const code = this.pickupCode.trim()
+        if (!code) {
+          uni.showToast({
+            title: '请输入收货码',
+            icon: 'none'
+          })
+          return
+        }
+      }
+      if (!this.orderId) {
+        uni.showToast({
+          title: '订单信息缺失',
+          icon: 'none'
+        })
+        return
+      }
+
+      try {
+        this.loading = true
+        await completeOrder(this.orderId, this.pickupCode.trim())
+        uni.showToast({
+          title: '收货成功',
+          icon: 'success'
+        })
+        setTimeout(() => {
+          uni.redirectTo({
+            url: '/pages/runner/pending-orders?status=completed'
+          })
+        }, 1200)
+      } catch (e: any) {
+        console.error('确认收货失败:', e)
+      } finally {
+        this.loading = false
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+.confirm-container {
+  min-height: 100vh;
+  background: #f3f4f6;
+  display: flex;
+  flex-direction: column;
+}
+
+.navbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+}
+
+.nav-title {
+  flex: 1;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.placeholder {
+  width: 64rpx;
+}
+
+.content {
+  flex: 1;
+  padding: 24rpx 24rpx 40rpx;
+  box-sizing: border-box;
+}
+
+.order-card {
+  background: #ffffff;
+  border-radius: 20rpx;
+  padding: 20rpx 18rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 4rpx 12rpx rgba(15, 23, 42, 0.06);
+}
+
+.order-no,
+.order-type,
+.order-route,
+.order-amount-label {
+  display: block;
+  font-size: 26rpx;
+  color: #111827;
+  margin-bottom: 8rpx;
+}
+
+.order-amount-label {
+  font-size: 26rpx;
+  color: #111827;
+}
+
+.order-amount-value {
+  font-weight: 700;
+  font-size: 30rpx;
+  color: #ef4444; /* 与订单详情页实付金额高亮色保持一致 */
+}
+
+.code-card {
+  background: #ffffff;
+  border-radius: 20rpx;
+  padding: 24rpx 20rpx 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(15, 23, 42, 0.06);
+  margin-bottom: 40rpx;
+}
+
+.code-label {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #111827;
+}
+
+.code-input {
+  margin-top: 16rpx;
+  width: 100%;
+  height: 80rpx;
+  border-radius: 999rpx;
+  background: #f3f4f6;
+  padding: 0 24rpx;
+  box-sizing: border-box;
+  font-size: 30rpx;
+  color: #111827;
+}
+
+.code-tip {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #6b7280;
+}
+
+.confirm-btn {
+  width: 100%;
+  height: 96rpx;
+  border-radius: 999rpx;
+  border: none;
+  /* 与小程序主题一致的蓝色主按钮样式 */
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 55%, #60a5fa 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10rpx 24rpx rgba(37, 99, 235, 0.4);
+}
+
+.confirm-btn-text {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #ffffff;
+}
+</style>
+

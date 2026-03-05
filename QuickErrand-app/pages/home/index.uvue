@@ -1,0 +1,645 @@
+<template>
+  <view class="home-container">
+    <!-- 顶部搜索栏 -->
+    <view class="header">
+      <view class="search-section">
+        <view class="search-input-wrapper">
+          <input
+            class="search-input"
+            v-model="searchKeyword"
+            placeholder="搜索服务类型、描述"
+            @confirm="handleSearch"
+            @input="handleSearchInput"
+          />
+          <view v-if="searchKeyword" class="clear-btn" @click="clearSearch">
+            <text class="clear-icon">✕</text>
+          </view>
+          <view class="search-action-btn" @click="handleSearch">
+            <text class="search-action-text">搜索</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- Banner轮播 -->
+    <view class="banner-section" v-if="banners.length > 0">
+      <swiper class="banner-swiper" indicator-dots circular autoplay @click="handleBannerClick">
+        <swiper-item v-for="(banner, index) in banners" :key="banner.id">
+          <view class="banner-item" :style="getBannerStyle(banner)">
+            <image v-if="banner.imageUrl" :src="banner.imageUrl" class="banner-image" mode="scaleToFill" />
+            <view v-if="!banner.imageUrl" class="banner-content">
+              <text class="banner-title">{{ banner.title }}</text>
+            </view>
+          </view>
+        </swiper-item>
+      </swiper>
+    </view>
+
+    <!-- 公告区域 -->
+    <view class="announcement-section" v-if="announcements && announcements.length > 0">
+      <view class="section-header">
+        <text class="section-title">平台公告</text>
+        <text class="section-subtitle">重要通知请及时查看</text>
+      </view>
+      <view class="announcement-list">
+        <view
+          v-for="item in announcements"
+          :key="item.id"
+          class="announcement-item"
+        >
+          <text class="announcement-title">{{ item.title }}</text>
+          <!-- content 为 markdown/HTML，这里用富文本组件简单渲染 -->
+          <rich-text class="announcement-content" :nodes="item.content" />
+        </view>
+      </view>
+    </view>
+
+    <!-- 订单类型列表 -->
+    <view class="service-section">
+      <view class="section-header">
+        <text class="section-title">服务类型</text>
+        <text class="section-subtitle">选择您需要的服务</text>
+      </view>
+
+      <view class="service-grid">
+        <view
+          v-for="(item, index) in displayedOrderTypes"
+          :key="item.id"
+          class="service-item"
+          @click="selectOrderType(item)"
+        >
+          <view class="service-icon-wrapper">
+            <image v-if="item.icon && item.icon.startsWith('/')" :src="item.icon" class="service-icon-image" mode="aspectFit" />
+            <text v-else class="service-icon">{{ item.icon || '📦' }}</text>
+          </view>
+          <text class="service-name">{{ item.typeName }}</text>
+          <text class="service-desc">{{ item.description || '暂无描述' }}</text>
+        </view>
+      </view>
+
+      <!-- 更多按钮 -->
+      <view v-if="orderTypes.length > 4" class="more-section">
+        <view class="more-btn" @click="goToServicePage">
+          <text class="more-btn-text">查看更多</text>
+          <text class="more-btn-icon">→</text>
+        </view>
+      </view>
+
+      <!-- 空状态 -->
+      <view v-if="orderTypes.length === 0 && !loading" class="empty-state">
+        <text class="empty-icon">📦</text>
+        <text class="empty-text">暂无服务类型</text>
+      </view>
+
+      <!-- 加载状态 -->
+      <view v-if="loading" class="loading-state">
+        <text class="loading-text">加载中...</text>
+      </view>
+    </view>
+
+    <!-- 底部说明 -->
+    <view class="footer-info">
+      <text class="info-text">💡 温馨提示：下单前请确认取件和送达地址</text>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getOrderTypes } from '@/common/api/order.uts'
+import type { OrderTypeInfo } from '@/common/api/order.uts'
+import { getBannerList } from '@/common/api/banner.uts'
+import type { BannerInfo } from '@/common/api/banner.uts'
+import { checkIsRunner } from '@/store/user.uts'
+import { getAnnouncementList } from '@/common/api/announcement.uts'
+import type { AnnouncementInfo } from '@/common/api/announcement.uts'
+
+export default {
+  data() {
+    return {
+      orderTypes: [] as OrderTypeInfo[],
+      banners: [] as BannerInfo[],
+      loading: false,
+      searchKeyword: '',
+      announcements: [] as AnnouncementInfo[]
+    }
+  },
+  computed: {
+    // 计算属性：只显示前4个服务类型
+    displayedOrderTypes() {
+      return this.orderTypes.slice(0, 4)
+    }
+  },
+  onLoad() {
+    // 如果当前账号是跑腿员，直接跳转到跑腿员首页，避免看到用户端首页
+    if (checkIsRunner()) {
+      uni.reLaunch({
+        url: '/pages/runner/home'
+      })
+      return
+    }
+    this.loadOrderTypes()
+    this.loadBanners()
+    this.loadAnnouncements()
+  },
+  onShow() {
+    // 进入首页时再次判断角色，防止从左上角“首页”返回时进入用户端首页
+    if (checkIsRunner()) {
+      uni.reLaunch({
+        url: '/pages/runner/home'
+      })
+      return
+    }
+    this.loadOrderTypes()
+    this.loadBanners()
+    this.loadAnnouncements()
+  },
+  methods: {
+    async loadOrderTypes() {
+      this.loading = true
+      try {
+        const res = await getOrderTypes()
+        console.log('获取到的订单类型数据:', res)
+        // 过滤：status为null或1的都显示（后端已经过滤了status=1，但为了兼容性保留）
+        this.orderTypes = res.filter((item: OrderTypeInfo) => !item.status || item.status === 1)
+        // 排序：处理sort为null的情况
+        this.orderTypes.sort((a: OrderTypeInfo, b: OrderTypeInfo) => {
+          const sortA = a.sort ?? 999
+          const sortB = b.sort ?? 999
+          return sortA - sortB
+        })
+        console.log('处理后的订单类型数据:', this.orderTypes)
+      } catch (error) {
+        console.error('获取订单类型失败:', error)
+        uni.showToast({
+          title: '加载失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async loadBanners() {
+      try {
+        const res = await getBannerList(1) // 1表示首页
+        this.banners = res
+      } catch (error) {
+        console.error('获取轮播图失败:', error)
+        // 轮播图加载失败不显示错误提示，使用默认样式
+      }
+    },
+
+    async loadAnnouncements() {
+      try {
+        // 位置 1：首页公告，最多 3 条
+        this.announcements = await getAnnouncementList(1, 3)
+      } catch (error) {
+        console.error('获取公告失败:', error)
+      }
+    },
+
+    getBannerStyle(banner: BannerInfo) {
+      if (banner.imageUrl) {
+        return {}
+      }
+      // 如果没有图片URL，使用默认渐变背景
+      const gradients = [
+        'linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%)',
+        'linear-gradient(135deg, #f97316 0%, #fb923c 50%, #fdba74 100%)',
+        'linear-gradient(135deg, #10b981 0%, #34d399 50%, #6ee7b7 100%)'
+      ]
+      const index = this.banners.indexOf(banner) % 3
+      return {
+        background: gradients[index]
+      }
+    },
+
+    handleBannerClick() {
+      // 可以在这里处理轮播图点击事件，比如跳转到指定链接
+      // const currentBanner = this.banners[this.currentBannerIndex]
+      // if (currentBanner && currentBanner.linkUrl) {
+      //   // 处理跳转逻辑
+      // }
+    },
+
+    selectOrderType(item: OrderTypeInfo) {
+      uni.navigateTo({
+        url: `/subpkg/order-create?orderTypeId=${item.id}`
+      })
+    },
+
+    handleSearch() {
+      if (!this.searchKeyword.trim()) {
+        uni.showToast({
+          title: '请输入搜索关键词',
+          icon: 'none'
+        })
+        return
+      }
+      // 跳转到服务页面，传递搜索关键词
+      // 注意：由于服务页面是tabBar页面，需要使用switchTab，但switchTab不支持参数
+      // 所以先跳转到服务页面，然后在服务页面的onShow中检查是否有搜索关键词
+      // 但更好的方式是使用全局状态或者事件总线
+      // 这里使用一个临时方案：先存储到本地存储，然后跳转
+      const keyword = this.searchKeyword.trim()
+      uni.setStorageSync('searchKeyword', keyword)
+      // 清空搜索框内容
+      this.searchKeyword = ''
+      uni.switchTab({
+        url: '/pages/service/index'
+      })
+    },
+
+    handleSearchInput(e: any) {
+      this.searchKeyword = e.detail.value
+    },
+
+    clearSearch() {
+      this.searchKeyword = ''
+    },
+
+    goToServicePage() {
+      // 跳转到服务页面
+      uni.switchTab({
+        url: '/pages/service/index'
+      })
+    }
+  }
+}
+</script>
+
+<style scoped>
+.home-container {
+  min-height: 100vh;
+  background: #f9fafb;
+  padding-bottom: 30rpx;
+}
+
+/* 顶部搜索栏 */
+.header {
+  padding: 40rpx 30rpx 24rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  box-shadow: 0 4rpx 20rpx rgba(37, 99, 235, 0.15);
+}
+
+.search-section {
+  padding: 0;
+  background: transparent;
+  border-bottom: none;
+  box-shadow: none;
+}
+
+.search-input-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background: #ffffff;
+  border-radius: 50rpx;
+  padding: 0 20rpx;
+  border: 2rpx solid #e5e7eb;
+  transition: all 0.3s;
+  gap: 12rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.08);
+}
+
+.search-input-wrapper:focus-within {
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 4rpx rgba(37, 99, 235, 0.1);
+}
+
+.search-input {
+  flex: 1;
+  height: 80rpx;
+  font-size: 28rpx;
+  color: #1f2937;
+}
+
+.clear-btn {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12rpx;
+  background: #e5e7eb;
+  border-radius: 50%;
+}
+
+.clear-icon {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.search-action-btn {
+  padding: 18rpx 36rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 50rpx;
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.search-action-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 2rpx 8rpx rgba(37, 99, 235, 0.3);
+}
+
+.search-action-text {
+  font-size: 28rpx;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* Banner轮播 */
+.banner-section {
+  margin: 30rpx;
+  border-radius: 24rpx;
+  overflow: hidden;
+}
+
+.banner-swiper {
+  height: 340rpx;
+  border-radius: 24rpx;
+  overflow: hidden;
+  box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.12);
+}
+
+.banner-item {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border-radius: 24rpx;
+  position: relative;
+  overflow: hidden;
+}
+
+.banner-image {
+  width: 100%;
+  height: 100%;
+}
+
+.banner-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.banner-title {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 15rpx;
+  text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.15);
+  position: relative;
+  z-index: 2;
+}
+
+.banner-subtitle {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.95);
+  position: relative;
+  z-index: 2;
+}
+
+/* 平台公告 */
+.announcement-section {
+  margin: 0 30rpx 24rpx;
+}
+
+.announcement-list {
+  background: linear-gradient(135deg, #eff6ff 0%, #e0f2fe 100%);
+  border-radius: 24rpx;
+  padding: 20rpx 22rpx;
+  box-shadow: 0 4rpx 16rpx rgba(37, 99, 235, 0.12);
+  border: 1rpx solid rgba(37, 99, 235, 0.12);
+}
+
+.announcement-item + .announcement-item {
+  margin-top: 16rpx;
+  padding-top: 12rpx;
+  border-top: 1rpx dashed rgba(148, 163, 184, 0.6);
+}
+
+.announcement-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 6rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.announcement-title::before {
+  content: '📢';
+  margin-right: 10rpx;
+  font-size: 26rpx;
+}
+
+.announcement-content {
+  font-size: 24rpx;
+  color: #4b5563;
+  line-height: 1.6;
+  max-height: 3.2em;
+  overflow: hidden;
+}
+
+/* 服务类型 */
+.service-section {
+  margin: 30rpx;
+}
+
+.section-header {
+  margin-bottom: 30rpx;
+}
+
+.section-title {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #1f2937;
+  display: block;
+  margin-bottom: 12rpx;
+  letter-spacing: -0.5rpx;
+}
+
+.section-subtitle {
+  font-size: 26rpx;
+  color: #6b7280;
+}
+
+.service-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24rpx;
+}
+
+.service-item {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 36rpx 30rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.service-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6rpx;
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.service-item:active {
+  transform: translateY(-4rpx) scale(0.98);
+  box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.15);
+}
+
+.service-item:active::before {
+  opacity: 1;
+}
+
+.service-icon-wrapper {
+  width: 120rpx;
+  height: 120rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20rpx;
+  position: relative;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+  border-radius: 24rpx;
+}
+
+.service-icon {
+  font-size: 80rpx;
+  line-height: 1;
+}
+
+.service-icon-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.service-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 8rpx;
+}
+
+.service-desc {
+  font-size: 24rpx;
+  color: #6b7280;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 0;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+  margin-bottom: 30rpx;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 加载状态 */
+.loading-state {
+  display: flex;
+  justify-content: center;
+  padding: 100rpx 0;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 更多按钮 */
+.more-section {
+  margin-top: 30rpx;
+  display: flex;
+  justify-content: center;
+}
+
+.more-btn {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 24rpx 60rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 50rpx;
+  box-shadow: 0 4rpx 16rpx rgba(37, 99, 235, 0.25);
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.more-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 2rpx 8rpx rgba(37, 99, 235, 0.25);
+}
+
+.more-btn-text {
+  font-size: 30rpx;
+  color: #ffffff;
+  font-weight: 600;
+  display: inline-block;
+  line-height: 1;
+}
+
+.more-btn-icon {
+  font-size: 32rpx;
+  color: #ffffff;
+  font-weight: 600;
+  display: inline-block;
+  line-height: 1;
+}
+
+/* 底部说明 */
+.footer-info {
+  margin: 30rpx;
+  padding: 28rpx 32rpx;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border-radius: 20rpx;
+  border-left: 6rpx solid #f59e0b;
+  box-shadow: 0 2rpx 8rpx rgba(245, 158, 11, 0.1);
+}
+
+.info-text {
+  font-size: 26rpx;
+  color: #92400e;
+  line-height: 1.6;
+}
+</style>

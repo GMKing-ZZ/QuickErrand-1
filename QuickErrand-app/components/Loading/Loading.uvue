@@ -1,0 +1,73 @@
+<template>
+  <view class="loading-container" v-if="show">
+    <view class="loading-content">
+      <view class="loading-spinner"></view>
+      <text class="loading-text">{{ text }}</text>
+    </view>
+  </view>
+</template>
+
+<script>
+export default {
+  name: 'Loading',
+  props: {
+    show: {
+      type: Boolean,
+      default: false
+    },
+    text: {
+      type: String,
+      default: '加载中...'
+    }
+  }
+}
+</script>
+
+<style scoped>
+.loading-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30rpx;
+  background-color: rgba(0, 0, 0, 0.7);
+  border-radius: 10rpx;
+}
+
+.loading-spinner {
+  width: 60rpx;
+  height: 60rpx;
+  border: 4rpx solid #ffffff;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  margin-top: 20rpx;
+  font-size: 28rpx;
+  color: #ffffff;
+}
+</style>

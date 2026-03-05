@@ -1,0 +1,1091 @@
+<template>
+  <view class="register-container">
+    <!-- 背景装饰 -->
+    <view class="bg-decoration">
+      <view class="circle circle-1"></view>
+      <view class="circle circle-2"></view>
+      <view class="circle circle-3"></view>
+    </view>
+
+    <!-- 主内容 -->
+    <view class="content">
+      <!-- Logo区域 -->
+      <view class="logo-section">
+        <image class="logo" src="/static/logo.png" mode="aspectFit"></image>
+        <text class="app-name">跑腿小程序</text>
+        <text class="slogan">创建您的跑腿账号</text>
+      </view>
+
+      <!-- 注册表单 -->
+      <view class="form-card">
+        <view class="step-indicator">
+          <view class="step" :class="{ active: step >= 1, completed: step > 1 }">
+            <view class="step-circle">
+              <text class="step-number">{{ step > 1 ? '✓' : '1' }}</text>
+            </view>
+            <text class="step-label">手机验证</text>
+          </view>
+          <view class="step-line" :class="{ active: step > 1 }"></view>
+          <view class="step" :class="{ active: step >= 2 }">
+            <view class="step-circle">
+              <text class="step-number">2</text>
+            </view>
+            <text class="step-label">设置密码</text>
+          </view>
+        </view>
+
+        <!-- 步骤1：手机验证 -->
+        <view v-if="step === 1" class="form-content">
+          <view class="input-group">
+            <view class="input-wrapper">
+              <text class="input-icon">📱</text>
+              <input
+                class="input-field"
+                type="number"
+                v-model="phone"
+                placeholder="请输入手机号"
+                maxlength="11"
+              />
+            </view>
+          </view>
+
+          <view class="input-group">
+            <view class="input-wrapper">
+              <text class="input-icon">🔐</text>
+              <input
+                class="input-field"
+                type="number"
+                v-model="code"
+                placeholder="请输入验证码"
+                maxlength="6"
+              />
+              <button
+                class="code-btn"
+                :disabled="countdown > 0"
+                @click="sendCode"
+              >
+                <text class="code-btn-text">
+                  {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
+                </text>
+              </button>
+            </view>
+          </view>
+
+          <button class="next-btn" @click="nextStep" :loading="loading">
+            <text class="btn-text">下一步</text>
+          </button>
+        </view>
+
+        <!-- 步骤2：设置密码 -->
+        <view v-else class="form-content">
+          <view class="input-group">
+            <view class="input-wrapper">
+              <text class="input-icon">🔒</text>
+              <input
+                class="input-field"
+                type="text"
+                :password="!showPassword"
+                v-model="password"
+                placeholder="请设置登录密码（6-20位）"
+              />
+              <text class="toggle-password" @click="togglePassword">
+                {{ showPassword ? '👁️' : '👁️‍🗨️' }}
+              </text>
+            </view>
+            <view class="password-strength">
+              <view class="strength-bar">
+                <view
+                  class="strength-fill"
+                  :class="passwordStrength"
+                  :style="{ width: passwordStrengthWidth }"
+                ></view>
+              </view>
+              <text class="strength-text">{{ passwordStrengthText }}</text>
+            </view>
+          </view>
+
+          <view class="input-group">
+            <view class="input-wrapper">
+              <text class="input-icon">🔒</text>
+              <input
+                class="input-field"
+                type="text"
+                :password="!showConfirmPassword"
+                v-model="confirmPassword"
+                placeholder="请再次输入密码"
+              />
+              <text class="toggle-password" @click="toggleConfirmPassword">
+                {{ showConfirmPassword ? '👁️' : '👁️‍🗨️' }}
+              </text>
+            </view>
+          </view>
+
+          <view class="input-group">
+            <view class="input-wrapper">
+              <text class="input-icon">👤</text>
+              <input
+                class="input-field"
+                type="text"
+                v-model="nickname"
+                placeholder="请输入昵称（选填）"
+              />
+            </view>
+          </view>
+
+          <view v-if="!presetUserType" class="input-group">
+            <text class="user-type-label">注册类型</text>
+            <view class="user-type-wrapper">
+              <view
+                class="user-type-item"
+                :class="{ active: userType === 1 }"
+                @click="selectUserType(1)"
+              >
+                <text class="user-type-icon">👤</text>
+                <text class="user-type-text">普通用户</text>
+              </view>
+              <view
+                class="user-type-item"
+                :class="{ active: userType === 2 }"
+                @click="selectUserType(2)"
+              >
+                <text class="user-type-icon">🏃</text>
+                <text class="user-type-text">跑腿员</text>
+              </view>
+            </view>
+            <view v-if="userType === 2" class="runner-tip">
+              <text class="tip-icon">ℹ️</text>
+              <text class="tip-text">跑腿员注册后需要完成资质认证才能接单</text>
+            </view>
+          </view>
+
+          <view v-else class="user-type-display">
+            <view class="display-item">
+              <text class="display-icon">{{ userType === 2 ? '🏃' : '👤' }}</text>
+              <text class="display-text">{{ userType === 2 ? '跑腿员注册' : '用户注册' }}</text>
+            </view>
+            <view v-if="userType === 2" class="runner-tip">
+              <text class="tip-icon">ℹ️</text>
+              <text class="tip-text">跑腿员注册后需要完成资质认证才能接单</text>
+            </view>
+          </view>
+
+          <button class="register-btn" @click="handleRegister" :loading="loading">
+            <text class="btn-text">完成注册</text>
+          </button>
+
+          <button class="back-step-btn" @click="prevStep">
+            <text class="back-step-text">上一步</text>
+          </button>
+        </view>
+      </view>
+
+      <!-- 底部提示 -->
+      <view class="footer">
+        <text class="footer-text">已有账号？</text>
+        <text class="footer-link" @click="goToLogin">立即登录</text>
+      </view>
+      
+      <!-- 协议提示 -->
+      <view class="agreement-footer">
+        <text class="agreement-text">注册即表示同意</text>
+        <text class="agreement-link" @click="goToUserAgreement">《用户协议》</text>
+        <text class="agreement-text">和</text>
+        <text class="agreement-link" @click="goToPrivacy">《隐私政策》</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { sendCode as sendCodeApi, register as registerApi } from '@/common/api/user.uts'
+
+export default {
+  data() {
+    return {
+      step: 1,
+      phone: '',
+      code: '',
+      password: '',
+      confirmPassword: '',
+      nickname: '',
+      userType: 1,
+      showPassword: false,
+      showConfirmPassword: false,
+      countdown: 0,
+      loading: false,
+      timer: null,
+      presetUserType: null
+    }
+  },
+  onLoad(options: any) {
+    if (options.userType) {
+      this.presetUserType = parseInt(options.userType)
+      this.userType = this.presetUserType
+    }
+  },
+  computed: {
+    passwordStrength() {
+      const pwd = this.password
+      if (!pwd) return ''
+      if (pwd.length < 6) return 'weak'
+      if (pwd.length < 10) return 'medium'
+      return 'strong'
+    },
+    passwordStrengthWidth() {
+      const strength = this.passwordStrength
+      if (strength === 'weak') return '33%'
+      if (strength === 'medium') return '66%'
+      if (strength === 'strong') return '100%'
+      return '0%'
+    },
+    passwordStrengthText() {
+      const strength = this.passwordStrength
+      if (strength === 'weak') return '弱'
+      if (strength === 'medium') return '中'
+      if (strength === 'strong') return '强'
+      return ''
+    }
+  },
+  methods: {
+    goBack() {
+      uni.navigateBack()
+    },
+
+    togglePassword() {
+      this.showPassword = !this.showPassword
+    },
+
+    toggleConfirmPassword() {
+      this.showConfirmPassword = !this.showConfirmPassword
+    },
+
+    async sendCode() {
+      if (!this.phone || this.phone.length !== 11) {
+        uni.showToast({
+          title: '请输入正确的手机号',
+          icon: 'none'
+        })
+        return
+      }
+
+      // 本地环境：不调用发送验证码接口，直接显示成功提示
+      uni.showToast({
+        title: '验证码已发送',
+        icon: 'success'
+      })
+
+      // 开始倒计时
+      this.countdown = 60
+      this.timer = setInterval(() => {
+        this.countdown--
+        if (this.countdown <= 0) {
+          clearInterval(this.timer)
+        }
+      }, 1000)
+    },
+
+    nextStep() {
+      if (!this.phone || this.phone.length !== 11) {
+        uni.showToast({
+          title: '请输入正确的手机号',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (!this.code || this.code.length !== 6) {
+        uni.showToast({
+          title: '请输入6位验证码',
+          icon: 'none'
+        })
+        return
+      }
+
+      this.step = 2
+    },
+
+    prevStep() {
+      this.step = 1
+    },
+
+    selectUserType(type: number) {
+      this.userType = type
+    },
+
+    async handleRegister() {
+      if (!this.password || this.password.length < 6) {
+        uni.showToast({
+          title: '密码不能少于6位',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (this.password !== this.confirmPassword) {
+        uni.showToast({
+          title: '两次密码输入不一致',
+          icon: 'none'
+        })
+        return
+      }
+
+      this.loading = true
+      try {
+        await registerApi({
+          phone: this.phone,
+          code: this.code,
+          password: this.password,
+          nickname: this.nickname,
+          userType: this.userType
+        })
+
+        // 根据注册类型给出不同的提示
+        if (this.userType === 2) {
+          uni.showModal({
+            title: '注册成功',
+            content: '你已注册为跑腿员账号，请先完成跑腿员认证，审核通过后即可开始接单。',
+            confirmText: '去认证',
+            cancelText: '先去登录',
+            success: (res) => {
+              if (res.confirm) {
+                // 先回到登录页，再由登录后进入跑腿端
+                uni.navigateBack({
+                  success: () => {
+                    // 可以在登录成功后由你在首页/服务页提供“跑腿员中心”入口
+                  }
+                })
+              } else {
+                uni.navigateBack()
+              }
+            }
+          })
+        } else {
+          uni.showToast({
+            title: '注册成功',
+            icon: 'success'
+          })
+
+          setTimeout(() => {
+            uni.navigateBack()
+          }, 1500)
+        }
+      } catch (error) {
+        console.error('注册失败:', error)
+      } finally {
+        this.loading = false
+      }
+    },
+
+    goToLogin() {
+      uni.navigateTo({
+        url: '/subpkg/login'
+      })
+    },
+
+    goToUserAgreement() {
+      uni.navigateTo({
+        url: '/pages/common/user-agreement'
+      })
+    },
+
+    goToPrivacy() {
+      uni.navigateTo({
+        url: '/pages/common/privacy'
+      })
+    }
+  },
+
+  onUnload() {
+    if (this.timer) {
+      clearInterval(this.timer)
+    }
+  }
+}
+</script>
+
+<style scoped>
+.register-container {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  height: 100vh;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* 安全区域适配 */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: border-box;
+}
+
+/* 背景装饰 */
+.bg-decoration {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  top: 0;
+  left: 0;
+}
+
+.circle {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  animation: float 20s infinite ease-in-out;
+}
+
+.circle-1 {
+  width: 300rpx;
+  height: 300rpx;
+  top: -100rpx;
+  left: -100rpx;
+}
+
+.circle-2 {
+  width: 200rpx;
+  height: 200rpx;
+  top: 200rpx;
+  right: -50rpx;
+  animation-delay: -5s;
+}
+
+.circle-3 {
+  width: 150rpx;
+  height: 150rpx;
+  bottom: 100rpx;
+  left: 50%;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30rpx) rotate(180deg);
+  }
+}
+
+/* 主内容 */
+.content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 60rpx 40rpx 40rpx;
+  box-sizing: border-box;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Logo区域 */
+.logo-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 50rpx;
+  flex-shrink: 0;
+}
+
+.logo {
+  width: 120rpx;
+  height: 120rpx;
+  margin-bottom: 24rpx;
+  border-radius: 30rpx;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.app-name {
+  font-size: 44rpx;
+  font-weight: bold;
+  color: #ffffff;
+  margin-bottom: 8rpx;
+  text-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.2);
+}
+
+.slogan {
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* 表单卡片 */
+.form-card {
+  background: #ffffff;
+  border-radius: 32rpx;
+  padding: 40rpx 32rpx;
+  box-shadow: 0 20rpx 60rpx rgba(37, 99, 235, 0.25);
+  border: 1rpx solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 步骤指示器 */
+.step-indicator {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 40rpx;
+  padding: 20rpx 0;
+  width: 100%;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.step-circle {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12rpx;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2rpx solid transparent;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.08);
+}
+
+.step.active .step-circle {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-color: rgba(37, 99, 235, 0.3);
+  transform: scale(1.1);
+  box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.4);
+}
+
+.step.completed .step-circle {
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+  border-color: rgba(16, 185, 129, 0.3);
+  box-shadow: 0 8rpx 24rpx rgba(16, 185, 129, 0.3);
+}
+
+.step-number {
+  font-size: 26rpx;
+  color: #666666;
+  font-weight: 600;
+  transition: all 0.3s;
+}
+
+.step.active .step-number,
+.step.completed .step-number {
+  color: #ffffff;
+  font-size: 28rpx;
+}
+
+.step-label {
+  font-size: 24rpx;
+  color: #999999;
+  transition: all 0.3s;
+  font-weight: 500;
+}
+
+.step.active .step-label {
+  color: #2563eb;
+  font-weight: 600;
+  transform: scale(1.05);
+}
+
+.step.completed .step-label {
+  color: #10b981;
+}
+
+.step-line {
+  width: 100rpx;
+  height: 4rpx;
+  background: #e8e8e8;
+  margin: 0 15rpx;
+  margin-top: 0;
+  margin-bottom: 12rpx;
+  transition: all 0.4s;
+  border-radius: 2rpx;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  align-self: flex-start;
+  top: 32rpx;
+}
+
+.step-line.active {
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+  box-shadow: 0 2rpx 8rpx rgba(37, 99, 235, 0.3);
+}
+
+/* 表单内容 */
+.form-content {
+  animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.input-group {
+  margin-bottom: 24rpx;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.input-group:last-of-type {
+  margin-bottom: 0;
+}
+
+.input-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  background: #f9fafb;
+  border-radius: 50rpx;
+  padding: 0 28rpx;
+  height: 96rpx;
+  border: 1rpx solid #e5e7eb;
+  transition: all 0.3s;
+  box-sizing: border-box;
+  width: 100%;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.input-wrapper:focus-within {
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 4rpx rgba(37, 99, 235, 0.1);
+}
+
+.input-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34rpx;
+  margin-right: 18rpx;
+  flex-shrink: 0;
+  flex-grow: 0;
+  line-height: 1;
+  width: 34rpx;
+  height: 34rpx;
+  min-width: 34rpx;
+  vertical-align: middle;
+}
+
+.input-field {
+  flex: 1;
+  flex-shrink: 1;
+  flex-grow: 1;
+  font-size: 28rpx;
+  color: #333333;
+  min-width: 0;
+  width: 0;
+  height: 96rpx;
+  line-height: 96rpx;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  vertical-align: middle;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.input-field::placeholder {
+  color: #9ca3af;
+  font-size: 28rpx;
+}
+
+.code-btn {
+  padding: 18rpx 24rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 50rpx;
+  border: none;
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
+  transition: all 0.3s;
+  flex-shrink: 0;
+  margin-left: 12rpx;
+}
+
+.code-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 2rpx 8rpx rgba(37, 99, 235, 0.3);
+}
+
+.code-btn[disabled] {
+  background: #e0e0e0;
+  box-shadow: none;
+}
+
+.code-btn-text {
+  font-size: 24rpx;
+  color: #ffffff;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.toggle-password {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  padding: 0;
+  margin-left: 12rpx;
+  flex-shrink: 0;
+  flex-grow: 0;
+  cursor: pointer;
+  line-height: 1;
+  width: 48rpx;
+  height: 48rpx;
+  min-width: 48rpx;
+  vertical-align: middle;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 密码强度 */
+.password-strength {
+  display: flex;
+  align-items: center;
+  margin-top: 15rpx;
+}
+
+.strength-bar {
+  flex: 1;
+  height: 6rpx;
+  background: #e0e0e0;
+  border-radius: 3rpx;
+  overflow: hidden;
+  margin-right: 15rpx;
+}
+
+.strength-fill {
+  height: 100%;
+  transition: all 0.3s;
+}
+
+.strength-fill.weak {
+  background: #f44336;
+}
+
+.strength-fill.medium {
+  background: #ff9800;
+}
+
+.strength-fill.strong {
+  background: #4caf50;
+}
+
+.strength-text {
+  font-size: 24rpx;
+  color: #999999;
+}
+
+/* 按钮 */
+.next-btn,
+.register-btn {
+  width: 100%;
+  height: 96rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  border-radius: 50rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10rpx 30rpx rgba(37, 99, 235, 0.4);
+  transition: all 0.3s;
+  margin: 0;
+  padding: 0;
+  margin-top: 32rpx;
+}
+
+.next-btn:active,
+.register-btn:active {
+  transform: scale(0.98);
+  box-shadow: 0 6rpx 20rpx rgba(37, 99, 235, 0.3);
+}
+
+.btn-text {
+  font-size: 30rpx;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+.back-step-btn {
+  width: 100%;
+  height: 96rpx;
+  background: transparent;
+  border: 1rpx solid #e5e7eb;
+  border-radius: 50rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 24rpx;
+  transition: all 0.3s;
+}
+
+.back-step-btn:active {
+  background: #f9fafb;
+  border-color: #2563eb;
+  transform: scale(0.98);
+}
+
+.back-step-text {
+  font-size: 28rpx;
+  color: #666666;
+  font-weight: 500;
+}
+
+/* 底部 */
+.footer {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: nowrap;
+  margin-top: 40rpx;
+  flex-shrink: 0;
+  padding: 0 20rpx;
+  white-space: nowrap;
+}
+
+.footer-text {
+  display: inline;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.5;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.footer-link {
+  display: inline;
+  font-size: 22rpx;
+  color: #ffffff;
+  text-decoration: underline;
+  margin: 0 4rpx;
+  line-height: 1.5;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 响应式优化 - 小屏幕适配 */
+@media screen and (max-height: 667px) {
+  .content {
+    padding: 40rpx 40rpx 30rpx;
+  }
+  
+  .logo-section {
+    margin-bottom: 30rpx;
+  }
+  
+  .logo {
+    width: 100rpx;
+    height: 100rpx;
+    margin-bottom: 20rpx;
+  }
+  
+  .app-name {
+    font-size: 40rpx;
+  }
+  
+  .slogan {
+    font-size: 24rpx;
+  }
+  
+  .form-card {
+    padding: 32rpx 28rpx;
+  }
+  
+  .footer {
+    margin-top: 30rpx;
+  }
+}
+
+/* 优化按钮点击区域 */
+.next-btn,
+.register-btn {
+  position: relative;
+}
+
+/* 防止内容溢出 */
+.form-content {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 确保输入框内部元素横向排列，防止换行 */
+.input-wrapper {
+  white-space: nowrap;
+}
+
+/* 用户类型选择 */
+.user-type-label {
+  display: block;
+  font-size: 28rpx;
+  color: #333333;
+  font-weight: 500;
+  margin-bottom: 20rpx;
+}
+
+.user-type-wrapper {
+  display: flex;
+  flex-direction: row;
+  gap: 20rpx;
+  margin-bottom: 20rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.user-type-item {
+  flex: 1;
+  flex-basis: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30rpx 20rpx;
+  background: #f9fafb;
+  border: 2rpx solid #e5e7eb;
+  border-radius: 20rpx;
+  transition: all 0.3s;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.user-type-item.active {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-color: #2563eb;
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
+}
+
+.user-type-icon {
+  font-size: 48rpx;
+  margin-bottom: 12rpx;
+}
+
+.user-type-item.active .user-type-icon {
+  filter: brightness(0) invert(1);
+}
+
+.user-type-text {
+  font-size: 28rpx;
+  color: #666666;
+  font-weight: 500;
+}
+
+.user-type-item.active .user-type-text {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.runner-tip {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+  padding: 20rpx;
+  background: #fff3cd;
+  border-radius: 15rpx;
+  border-left: 4rpx solid #ffc107;
+  margin-top: 20rpx;
+}
+
+.tip-icon {
+  font-size: 32rpx;
+  flex-shrink: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.tip-text {
+  flex: 1;
+  font-size: 24rpx;
+  color: #856404;
+  line-height: 1.5;
+  display: flex;
+  align-items: center;
+}
+
+.user-type-display {
+  margin-bottom: 24rpx;
+}
+
+.display-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  padding: 30rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
+}
+
+.display-icon {
+  font-size: 48rpx;
+  margin-right: 16rpx;
+}
+
+.display-text {
+  font-size: 32rpx;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* 优化文本选择 */
+.btn-text,
+.footer-text,
+.footer-link {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 协议提示 */
+.agreement-footer {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: nowrap;
+  margin-top: 20rpx;
+  flex-shrink: 0;
+  padding: 0 20rpx;
+  white-space: nowrap;
+}
+
+.agreement-text {
+  display: inline;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.agreement-link {
+  display: inline;
+  font-size: 22rpx;
+  color: #ffffff;
+  text-decoration: underline;
+  margin: 0 4rpx;
+  line-height: 1.5;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+</style>

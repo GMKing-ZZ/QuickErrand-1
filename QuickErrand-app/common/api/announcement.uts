@@ -1,0 +1,33 @@
+/**
+ * 公告相关 API
+ */
+import { get } from '../utils/request.uts'
+
+export type AnnouncementInfo = {
+  id : number
+  title : string
+  content : string
+  position : number
+  isTop : number
+  status : number
+  publishTime ?: string
+  createTime ?: string
+  readCount ?: number
+}
+
+/**
+ * 获取公告列表（只返回已发布的公告，后端已按置顶和时间排序）
+ * @param position 展示位置：1-首页 2-个人中心
+ * @param limit    最大返回条数，默认 3
+ */
+export const getAnnouncementList = (position ?: number, limit : number = 3) : Promise<AnnouncementInfo[]> => {
+  const params : any = {}
+  if (position != null) {
+    params.position = position
+  }
+  if (limit) {
+    params.limit = limit
+  }
+  return get<AnnouncementInfo[]>('/announcement/list', params)
+}
+

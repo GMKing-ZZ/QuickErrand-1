@@ -1,0 +1,95 @@
+/**
+ * 聊天相关 API
+ */
+import { get } from '../utils/request.uts'
+
+export type ChatContact = {
+  contactId : number
+  nickname : string
+  avatar : string
+  lastContent : string
+  lastTime : number | null
+  unreadCount : number
+}
+
+export type ChatOrderConversation = {
+  orderId : number
+  orderNo : string
+  orderStatus : number
+  orderTitle : string
+  lastContent : string
+  lastTime : number | null
+  unreadCount : number
+}
+
+export type ChatConversation = {
+  orderId : number
+  orderNo : string
+  orderStatus : number
+  peerUserId : number
+  peerNickname : string
+  peerAvatar : string
+  lastContent : string
+  lastTime : number | null
+  unreadCount : number
+}
+
+export type ChatMessage = {
+  id : number
+  orderId : number
+  fromUserId : number
+  toUserId : number
+  content : string
+  msgType : number
+  readStatus : number
+  sendTime : number
+  readTime ?: number | null
+  self : boolean
+}
+
+export type ChatPeerInfo = {
+  orderId : number
+  peerUserId : number
+  peerNickname : string
+  peerAvatar : string
+}
+
+/**
+ * 获取联系人列表
+ */
+export const getChatContacts = () : Promise<ChatContact[]> => {
+  return get<ChatContact[]>('/chat/contacts')
+}
+
+/**
+ * 获取与指定联系人的订单聊天列表
+ */
+export const getContactOrderConversations = (contactId : number) : Promise<ChatOrderConversation[]> => {
+  return get<ChatOrderConversation[]>('/chat/contact-conversations', { contactId })
+}
+
+/**
+ * 获取当前用户会话列表（旧接口，保留兼容）
+ */
+export const getChatConversations = () : Promise<ChatConversation[]> => {
+  return get<ChatConversation[]>('/chat/conversations')
+}
+
+/**
+ * 获取订单下的聊天记录
+ */
+export const getChatMessages = (orderId : number, lastMessageId ?: number | null, pageSize ?: number | null) : Promise<ChatMessage[]> => {
+  return get<ChatMessage[]>('/chat/messages', {
+    orderId,
+    lastMessageId,
+    pageSize
+  })
+}
+
+/**
+ * 获取聊天对象信息（昵称、头像）
+ */
+export const getChatPeerInfo = (orderId : number) : Promise<ChatPeerInfo> => {
+  return get<ChatPeerInfo>('/chat/peer-info', { orderId })
+}
+

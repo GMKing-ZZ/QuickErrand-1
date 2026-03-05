@@ -1,0 +1,28 @@
+<template>
+  <view class="webview-container">
+    <web-view v-if="url" :src="url"></web-view>
+  </view>
+</template>
+
+<script lang="uts">
+  export default {
+    data() {
+      return {
+        url: ''
+      }
+    },
+    onLoad(options : UTSJSONObject) {
+      const url = options['url'] as string
+      if (url != null && url.length > 0) {
+        this.url = decodeURIComponent(url)
+      }
+    }
+  }
+</script>
+
+<style>
+  .webview-container {
+    flex: 1;
+    width: 100%;
+  }
+</style>

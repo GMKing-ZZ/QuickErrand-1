@@ -1,0 +1,7 @@
+{
+  "name": "system-service",
+  "version": "1.0.0",
+  "description": "系统服务云函数",
+  "main": "index.js",
+  "dependencies": {}
+}

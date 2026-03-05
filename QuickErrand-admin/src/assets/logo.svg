@@ -1,0 +1,30 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 跑腿管理后台logo - 简洁设计，体现快速配送概念 -->
+  
+  <!-- 背景圆形 - 使用蓝色系，体现专业和可靠 -->
+  <circle cx="64" cy="64" r="56" fill="#2563EB" opacity="0.1"/>
+  
+  <!-- 主图标：快速配送的包裹和箭头 -->
+  <g>
+    <!-- 包裹盒子 -->
+    <rect x="42" y="50" width="44" height="32" rx="4" fill="#2563EB" stroke="#1E40AF" stroke-width="2"/>
+    <rect x="46" y="54" width="36" height="24" rx="2" fill="#3B82F6"/>
+    
+    <!-- 包裹封条 -->
+    <line x1="64" y1="50" x2="64" y2="82" stroke="#1E40AF" stroke-width="2" stroke-linecap="round"/>
+    <line x1="42" y1="66" x2="86" y2="66" stroke="#1E40AF" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- 快速箭头 - 体现速度 -->
+    <path d="M 88 66 L 100 66 L 100 58 L 108 64 L 100 70 L 100 62 L 88 62 Z" fill="#2563EB"/>
+    
+    <!-- 速度线条 -->
+    <line x1="92" y1="66" x2="96" y2="66" stroke="#60A5FA" stroke-width="2" stroke-linecap="round"/>
+    <line x1="38" y1="66" x2="42" y2="66" stroke="#60A5FA" stroke-width="2" stroke-linecap="round"/>
+    
+    <!-- 装饰点 - 体现移动轨迹 -->
+    <circle cx="36" cy="66" r="2" fill="#60A5FA"/>
+    <circle cx="98" cy="66" r="1.5" fill="#60A5FA"/>
+  </g>
+  
+  <!-- 底部文字区域（可选，如果需要显示文字） -->
+</svg>

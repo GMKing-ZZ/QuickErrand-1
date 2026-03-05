@@ -1,0 +1,115 @@
+/**
+ * 地址状态管理
+ */
+
+export type Address = {
+  id: number
+  name: string
+  phone: string
+  province: string
+  city: string
+  district: string
+  detail: string
+  fullAddress: string
+  longitude: number
+  latitude: number
+  isDefault: boolean
+}
+
+type AddressState = {
+  // 地址列表
+  addressList: Address[]
+  // 当前选中的地址
+  currentAddress: Address | null
+  // 默认地址
+  defaultAddress: Address | null
+}
+
+export const addressState = reactive({
+  addressList: [],
+  currentAddress: null,
+  defaultAddress: null
+} as AddressState)
+
+/**
+ * 设置地址列表
+ */
+export const setAddressList = (list : Address[]) => {
+  addressState.addressList = list
+  // 更新默认地址
+  const defaultAddr = list.find(item => item.isDefault)
+  if (defaultAddr) {
+    addressState.defaultAddress = defaultAddr
+  }
+}
+
+/**
+ * 添加地址
+ */
+export const addAddress = (address : Address) => {
+  addressState.addressList.push(address)
+  if (address.isDefault) {
+    addressState.defaultAddress = address
+  }
+}
+
+/**
+ * 更新地址
+ */
+export const updateAddress = (addressId : number, data : Partial<Address>) => {
+  const index = addressState.addressList.findIndex(item => item.id === addressId)
+  if (index !== -1) {
+    addressState.addressList[index] = { ...addressState.addressList[index], ...data }
+    // 更新默认地址
+    if (data.isDefault) {
+      addressState.defaultAddress = addressState.addressList[index]
+    }
+  }
+}
+
+/**
+ * 删除地址
+ */
+export const removeAddress = (addressId : number) => {
+  const index = addressState.addressList.findIndex(item => item.id === addressId)
+  if (index !== -1) {
+    const address = addressState.addressList[index]
+    addressState.addressList.splice(index, 1)
+    // 如果删除的是默认地址，清空默认地址
+    if (address.isDefault) {
+      addressState.defaultAddress = null
+    }
+  }
+}
+
+/**
+ * 设置当前地址
+ */
+export const setCurrentAddress = (address : Address | null) => {
+  addressState.currentAddress = address
+}
+
+/**
+ * 设置默认地址
+ */
+export const setDefaultAddress = (addressId : number) => {
+  // 取消所有地址的默认状态
+  addressState.addressList.forEach(item => {
+    item.isDefault = false
+  })
+  // 设置新的默认地址
+  const index = addressState.addressList.findIndex(item => item.id === addressId)
+  if (index !== -1) {
+    addressState.addressList[index].isDefault = true
+    addressState.defaultAddress = addressState.addressList[index]
+  }
+}
+
+/**
+ * 清空地址列表
+ */
+export const clearAddressList = () => {
+  addressState.addressList = []
+  addressState.currentAddress = null
+  addressState.defaultAddress = null
+}

@@ -1,0 +1,1120 @@
+<template>
+  <view class="edit-profile-container">
+    <!-- 头部背景 -->
+    <view class="header-bg">
+      <view class="wave"></view>
+    </view>
+
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="nav-title">编辑资料</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 头像区域 -->
+    <view class="avatar-section">
+      <view class="avatar-card">
+        <view class="avatar-wrapper" @click="chooseAvatar">
+          <image 
+            v-if="formData.avatar && !avatarError" 
+            class="avatar" 
+            :src="formData.avatar" 
+            mode="aspectFill" 
+            @error="handleAvatarError"
+          ></image>
+          <view v-else class="avatar-placeholder">
+            <text class="avatar-text">{{ (formData.nickname || '跑').charAt(0) }}</text>
+          </view>
+          <view class="avatar-mask">
+            <text class="camera-icon">📷</text>
+            <text class="edit-tip">点击更换</text>
+          </view>
+        </view>
+        <text class="avatar-label">点击更换头像</text>
+      </view>
+    </view>
+
+    <!-- 表单内容 -->
+    <view class="form-content">
+      <!-- 基本信息 -->
+      <view class="form-group">
+        <view class="group-title">基本信息</view>
+        <!-- 用户名 -->
+        <view class="form-item">
+          <view class="form-label-wrapper">
+            <text class="form-label-icon">🔖</text>
+            <text class="form-label">用户名</text>
+          </view>
+          <input
+            class="form-input"
+            v-model="formData.username"
+            placeholder="请输入用户名"
+            placeholder-style="color: #9ca3af"
+            maxlength="20"
+          />
+        </view>
+        <!-- 昵称 -->
+        <view class="form-item">
+          <view class="form-label-wrapper">
+            <text class="form-label-icon">👤</text>
+            <text class="form-label">昵称</text>
+          </view>
+          <input
+            class="form-input"
+            v-model="formData.nickname"
+            placeholder="请输入昵称"
+            placeholder-style="color: #9ca3af"
+            maxlength="20"
+          />
+        </view>
+
+        <!-- 手机号 -->
+        <view class="form-item">
+          <view class="form-label-wrapper">
+            <text class="form-label-icon">📱</text>
+            <text class="form-label">手机号</text>
+          </view>
+          <input
+            class="form-input"
+            v-model="formData.phone"
+            placeholder="请输入手机号"
+            placeholder-style="color: #9ca3af"
+            type="number"
+            maxlength="11"
+          />
+        </view>
+
+        <!-- 验证码 -->
+        <view class="form-item" v-if="formData.phone">
+          <view class="form-label-wrapper">
+            <text class="form-label-icon">🔐</text>
+            <text class="form-label">验证码</text>
+          </view>
+          <view class="code-input-wrapper">
+            <input
+              class="form-input code-input"
+              v-model="formData.code"
+              placeholder="请输入验证码"
+              placeholder-style="color: #9ca3af"
+              type="number"
+              maxlength="6"
+            />
+            <button 
+              class="code-btn" 
+              @click="sendVerificationCode" 
+              :disabled="countdown > 0 || sendingCode"
+            >
+              <text class="code-btn-text">{{ codeButtonText }}</text>
+            </button>
+          </view>
+        </view>
+
+        <!-- 性别 -->
+        <picker
+          mode="selector"
+          :range="genderOptions"
+          :value="genderIndex"
+          @change="onGenderChange"
+        >
+          <view class="form-item">
+            <view class="form-label-wrapper">
+              <text class="form-label-icon">⚧</text>
+              <text class="form-label">性别</text>
+            </view>
+            <view class="form-value-wrapper">
+              <text class="form-value" :class="{ 'placeholder-text': !formData.gender && formData.gender !== 0 }">
+                {{ genderText }}
+              </text>
+              <text class="form-arrow">›</text>
+            </view>
+          </view>
+        </picker>
+
+        <!-- 生日 -->
+        <picker
+          mode="date"
+          :value="formData.birthday"
+          @change="onDateChange"
+        >
+          <view class="form-item">
+            <view class="form-label-wrapper">
+              <text class="form-label-icon">🎂</text>
+              <text class="form-label">生日</text>
+            </view>
+            <view class="form-value-wrapper">
+              <text class="form-value" :class="{ 'placeholder-text': !formData.birthday }">
+                {{ formData.birthday || '请选择生日' }}
+              </text>
+              <text class="form-arrow">›</text>
+            </view>
+          </view>
+        </picker>
+
+      </view>
+
+      <!-- 服务设置（仅认证跑腿员可见） -->
+      <view class="form-group" v-if="isCertified">
+        <view class="group-title">服务设置</view>
+        
+        <!-- 服务时长 -->
+        <view class="form-item" @click="showTimePicker = true">
+          <view class="form-label-wrapper">
+            <text class="form-label-icon">🕐</text>
+            <text class="form-label">服务时长</text>
+          </view>
+          <view class="form-value-wrapper">
+            <text class="form-value">
+              {{ serviceTimeDisplay }}
+            </text>
+            <text class="form-arrow">›</text>
+          </view>
+        </view>
+
+        <!-- 服务范围 -->
+        <view class="form-item service-range-item">
+          <view class="form-label-wrapper">
+            <text class="form-label-icon">📍</text>
+            <text class="form-label">服务范围</text>
+          </view>
+          <view class="range-content">
+            <view class="range-header">
+              <text class="range-value">{{ serviceRangeDisplay }}</text>
+            </view>
+            <slider 
+              class="range-slider"
+              :min="1" 
+              :max="20" 
+              :value="serviceRangeKm" 
+              @change="onServiceRangeChange"
+              activeColor="#2563eb"
+              backgroundColor="#e5e7eb"
+              block-size="24"
+            />
+            <view class="range-labels">
+              <text class="range-label">1公里</text>
+              <text class="range-label">20公里</text>
+            </view>
+          </view>
+        </view>
+
+      </view>
+    </view>
+
+    <!-- 服务时间选择弹窗 -->
+    <view class="time-picker-modal" v-if="showTimePicker" @click="showTimePicker = false">
+      <view class="time-picker-content" @click.stop>
+        <view class="time-picker-header">
+          <text class="time-picker-title">选择服务时间</text>
+          <view class="time-picker-close" @click="showTimePicker = false">✕</view>
+        </view>
+        <view class="time-picker-body">
+          <view class="time-row">
+            <text class="time-label">开始时间</text>
+            <picker-view 
+              class="time-picker-view" 
+              :value="startTimePickerValue" 
+              @change="onStartTimeChange"
+            >
+              <picker-view-column>
+                <view class="time-picker-item" v-for="(hour, index) in hours" :key="index">
+                  {{ hour }}
+                </view>
+              </picker-view-column>
+              <picker-view-column>
+                <view class="time-picker-item" v-for="(minute, index) in minutes" :key="index">
+                  {{ minute }}
+                </view>
+              </picker-view-column>
+            </picker-view>
+          </view>
+          <view class="time-row">
+            <text class="time-label">结束时间</text>
+            <picker-view 
+              class="time-picker-view" 
+              :value="endTimePickerValue" 
+              @change="onEndTimeChange"
+            >
+              <picker-view-column>
+                <view class="time-picker-item" v-for="(hour, index) in hours" :key="index">
+                  {{ hour }}
+                </view>
+              </picker-view-column>
+              <picker-view-column>
+                <view class="time-picker-item" v-for="(minute, index) in minutes" :key="index">
+                  {{ minute }}
+                </view>
+              </picker-view-column>
+            </picker-view>
+          </view>
+        </view>
+        <view class="time-picker-footer">
+          <view class="time-picker-btn cancel" @click="showTimePicker = false">取消</view>
+          <view class="time-picker-btn confirm" @click="confirmTimePicker">确定</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 保存按钮 -->
+    <view class="save-section">
+      <button class="save-btn" @click="handleSave" :loading="loading" :disabled="loading">
+        <text class="btn-text">{{ loading ? '保存中...' : '保存' }}</text>
+      </button>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getUserInfo, updateUserInfo as updateUserInfoApi, sendCode } from '@/common/api/user.uts'
+import { getRunnerAuthInfo, updateRunnerServiceSettings } from '@/common/api/runner.uts'
+import { upload } from '@/common/utils/request.uts'
+import { updateUserInfo as updateUserInfoStore } from '@/store/user.uts'
+import { userState } from '@/store/user.uts'
+
+export default {
+  data() {
+    return {
+      formData: {
+        username: '',
+        nickname: '',
+        avatar: '',
+        gender: 0,
+        birthday: '',
+        phone: '',
+        code: ''
+      },
+      serviceData: {
+        serviceTime: '08:00-22:00',
+        serviceRange: 5000
+      },
+      loading: false,
+      genderOptions: ['未知', '男', '女'],
+      genderIndex: 0,
+      avatarError: false,
+      isCertified: false,
+      showTimePicker: false,
+      hours: [] as string[],
+      minutes: [] as string[],
+      startTimePickerValue: [8, 0] as number[],
+      endTimePickerValue: [22, 0] as number[],
+      tempStartTime: '08:00',
+      tempEndTime: '22:00',
+      sendingCode: false,
+      countdown: 0
+    }
+  },
+  computed: {
+    genderText() {
+      return this.genderOptions[this.formData.gender || 0]
+    },
+    codeButtonText(): string {
+      if (this.countdown > 0) {
+        return `${this.countdown}秒后重发`
+      }
+      return '获取验证码'
+    },
+    serviceTimeDisplay() {
+      return this.serviceData.serviceTime || '请选择服务时间'
+    },
+    serviceRangeKm() {
+      return Math.round(this.serviceData.serviceRange / 1000)
+    },
+    serviceRangeDisplay() {
+      const km = this.serviceRangeKm
+      return `${km}公里`
+    }
+  },
+  onLoad() {
+    this.initTimeOptions()
+    this.loadUserInfo()
+    this.loadRunnerInfo()
+  },
+  methods: {
+    initTimeOptions() {
+      for (let i = 0; i < 24; i++) {
+        this.hours.push(i.toString().padStart(2, '0'))
+      }
+      for (let i = 0; i < 60; i += 30) {
+        this.minutes.push(i.toString().padStart(2, '0'))
+      }
+    },
+
+    async loadUserInfo() {
+      try {
+        const res = await getUserInfo()
+        this.formData = {
+          username: res.username || '',
+          nickname: res.nickname || '',
+          avatar: res.avatar || '',
+          gender: res.gender || 0,
+          birthday: res.birthday || '',
+          phone: res.phone || '',
+          code: ''
+        }
+        this.genderIndex = this.formData.gender
+      } catch (error) {
+        console.error('获取用户信息失败:', error)
+      }
+    },
+
+    async loadRunnerInfo() {
+      try {
+        const res = await getRunnerAuthInfo()
+        if (res && res.certStatus === 2) {
+          this.isCertified = true
+          if (res.serviceTime) {
+            this.serviceData.serviceTime = res.serviceTime
+            const times = res.serviceTime.split('-')
+            if (times.length === 2) {
+              this.tempStartTime = times[0]
+              this.tempEndTime = times[1]
+              this.updatePickerValues()
+            }
+          }
+          if (res.serviceRange) {
+            this.serviceData.serviceRange = res.serviceRange
+          }
+        }
+      } catch (error) {
+        console.error('获取跑腿员信息失败:', error)
+      }
+    },
+
+    updatePickerValues() {
+      const startParts = this.tempStartTime.split(':')
+      const endParts = this.tempEndTime.split(':')
+      
+      if (startParts.length === 2) {
+        const startHour = parseInt(startParts[0])
+        const startMinute = parseInt(startParts[1])
+        this.startTimePickerValue = [startHour, startMinute === 0 ? 0 : 1]
+      }
+      
+      if (endParts.length === 2) {
+        const endHour = parseInt(endParts[0])
+        const endMinute = parseInt(endParts[1])
+        this.endTimePickerValue = [endHour, endMinute === 0 ? 0 : 1]
+      }
+    },
+
+    goBack() {
+      const pages = getCurrentPages()
+      if (pages.length > 1) {
+        uni.navigateBack()
+      } else {
+        uni.switchTab({
+          url: '/pages/runner/profile'
+        })
+      }
+    },
+
+    chooseAvatar() {
+      uni.chooseImage({
+        count: 1,
+        sizeType: ['compressed'],
+        sourceType: ['album', 'camera'],
+        success: async (res) => {
+          const tempFilePath = res.tempFilePaths[0]
+
+          uni.showLoading({
+            title: '上传中...'
+          })
+
+          try {
+            const userInfo: any = userState.userInfo
+            const username = userInfo?.username || 'user'
+            const uploadRes = await upload('/file/upload/avatar', tempFilePath, { username })
+            this.formData.avatar = uploadRes
+            uni.hideLoading()
+            uni.showToast({
+              title: '上传成功',
+              icon: 'success'
+            })
+          } catch (error) {
+            uni.hideLoading()
+            console.error('上传失败:', error)
+          }
+        }
+      })
+    },
+
+    onGenderChange(e) {
+      const index = e.detail.value
+      this.genderIndex = index
+      this.formData.gender = index
+    },
+
+    onDateChange(e) {
+      this.formData.birthday = e.detail.value
+    },
+
+    handleAvatarError(e) {
+      this.avatarError = true
+      console.log('头像加载失败:', e)
+    },
+
+    async sendVerificationCode() {
+      if (!this.formData.phone || this.formData.phone.length !== 11) {
+        uni.showToast({
+          title: '请输入正确的手机号',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (this.countdown > 0 || this.sendingCode) {
+        return
+      }
+
+      this.sendingCode = true
+      try {
+        // 本地环境：不调用发送验证码接口，直接显示成功提示
+        uni.showToast({
+          title: '验证码已发送',
+          icon: 'success'
+        })
+        this.startCountdown()
+      } catch (error) {
+        uni.showToast({
+          title: '验证码发送失败',
+          icon: 'none'
+        })
+        console.error('发送验证码失败:', error)
+      } finally {
+        this.sendingCode = false
+      }
+    },
+
+    startCountdown() {
+      this.countdown = 60
+      const timer = setInterval(() => {
+        this.countdown--
+        if (this.countdown <= 0) {
+          clearInterval(timer)
+        }
+      }, 1000)
+    },
+
+    onStartTimeChange(e) {
+      const val = e.detail.value as number[]
+      this.startTimePickerValue = val
+      this.tempStartTime = this.hours[val[0]] + ':' + this.minutes[val[1]]
+    },
+
+    onEndTimeChange(e) {
+      const val = e.detail.value as number[]
+      this.endTimePickerValue = val
+      this.tempEndTime = this.hours[val[0]] + ':' + this.minutes[val[1]]
+    },
+
+    confirmTimePicker() {
+      if (this.tempStartTime >= this.tempEndTime) {
+        uni.showToast({
+          title: '开始时间必须早于结束时间',
+          icon: 'none'
+        })
+        return
+      }
+      this.serviceData.serviceTime = this.tempStartTime + '-' + this.tempEndTime
+      this.showTimePicker = false
+    },
+
+    onServiceRangeChange(e) {
+      const km = e.detail.value as number
+      this.serviceData.serviceRange = km * 1000
+    },
+
+    async handleSave() {
+      if (!this.formData.nickname || this.formData.nickname.trim() === '') {
+        uni.showToast({
+          title: '请输入昵称',
+          icon: 'none'
+        })
+        return
+      }
+
+      // 验证用户名格式
+      if (this.formData.username && this.formData.username.trim() !== '') {
+        const usernameRegex = /^[a-zA-Z0-9_]{4,20}$/
+        if (!usernameRegex.test(this.formData.username.trim())) {
+          uni.showToast({
+            title: '用户名需4-20位字母、数字或下划线',
+            icon: 'none'
+          })
+          return
+        }
+      }
+
+      this.loading = true
+      try {
+        const updateData: any = {
+          username: this.formData.username,
+          nickname: this.formData.nickname,
+          avatar: this.formData.avatar,
+          gender: this.formData.gender,
+          birthday: this.formData.birthday
+        }
+
+        // 如果手机号有变化，需要传递验证码
+        if (this.formData.phone && this.formData.code) {
+          updateData.phone = this.formData.phone
+          updateData.code = this.formData.code
+        }
+
+        await updateUserInfoApi(updateData)
+        updateUserInfoStore(this.formData)
+
+        if (this.isCertified) {
+          await updateRunnerServiceSettings({
+            serviceTime: this.serviceData.serviceTime,
+            serviceRange: this.serviceData.serviceRange
+          })
+        }
+
+        uni.showToast({
+          title: '保存成功',
+          icon: 'success'
+        })
+        setTimeout(() => {
+          const pages = getCurrentPages()
+          if (pages.length > 1) {
+            uni.navigateBack()
+          } else {
+            uni.switchTab({
+              url: '/pages/runner/profile'
+            })
+          }
+        }, 1500)
+      } catch (error) {
+        uni.showToast({
+          title: '保存失败，请重试',
+          icon: 'none'
+        })
+        console.error('保存失败:', error)
+      } finally {
+        this.loading = false
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+.edit-profile-container {
+  min-height: 100vh;
+  background: #f9fafb;
+  padding-bottom: 40rpx;
+  box-sizing: border-box;
+}
+
+/* 头部背景 */
+.header-bg {
+  position: relative;
+  height: 280rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(37, 99, 235, 0.15);
+}
+
+.wave {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 200%;
+  height: 100rpx;
+  background: #f9fafb;
+  border-radius: 50% 50% 0 0;
+  transform: translateX(-25%);
+}
+
+/* 导航栏 */
+.navbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  z-index: 10;
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10rpx);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  flex-shrink: 0;
+  z-index: 11;
+}
+
+.back-btn:active {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(0.95);
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 1rpx;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.placeholder {
+  width: 64rpx;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* 头像区域 */
+.avatar-section {
+  position: relative;
+  margin: -80rpx 30rpx 40rpx;
+  display: flex;
+  justify-content: center;
+}
+
+.avatar-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.avatar-wrapper {
+  position: relative;
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 100rpx;
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  border: 6rpx solid #ffffff;
+  box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.2);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24rpx;
+}
+
+.avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 100rpx;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+}
+
+.avatar-text {
+  font-size: 80rpx;
+  font-weight: 700;
+  color: #ffffff;
+  text-align: center;
+}
+
+.avatar-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s;
+  border-radius: 100rpx;
+}
+
+.avatar-wrapper:active .avatar-mask {
+  opacity: 1;
+}
+
+.camera-icon {
+  font-size: 48rpx;
+  margin-bottom: 8rpx;
+}
+
+.edit-tip {
+  font-size: 24rpx;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.avatar-label {
+  font-size: 28rpx;
+  color: #6b7280;
+  margin-top: 8rpx;
+}
+
+/* 表单内容 */
+.form-content {
+  padding: 0 30rpx;
+}
+
+.form-group {
+  background: #ffffff;
+  border-radius: 24rpx;
+  overflow: hidden;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+  margin-bottom: 30rpx;
+}
+
+.group-title {
+  font-size: 28rpx;
+  color: #6b7280;
+  padding: 24rpx 30rpx 12rpx;
+  font-weight: 500;
+}
+
+.form-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 36rpx 30rpx;
+  border-bottom: 1rpx solid #f3f4f6;
+  min-height: 100rpx;
+  box-sizing: border-box;
+  transition: background 0.3s;
+}
+
+.form-item:active {
+  background: #f9fafb;
+}
+
+.form-item:last-child {
+  border-bottom: none;
+}
+
+.form-label-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  width: 200rpx;
+  min-width: 200rpx;
+}
+
+.form-label-icon {
+  font-size: 36rpx;
+  margin-right: 16rpx;
+  flex-shrink: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  width: 36rpx;
+  text-align: center;
+}
+
+.form-label {
+  font-size: 32rpx;
+  color: #1f2937;
+  font-weight: 500;
+  flex-shrink: 0;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+.form-input {
+  flex: 1;
+  font-size: 32rpx;
+  color: #1f2937;
+  text-align: right;
+  min-width: 0;
+  padding: 0;
+  margin-left: 0;
+}
+
+.form-value-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+  margin-left: 0;
+}
+
+.form-value {
+  font-size: 32rpx;
+  color: #1f2937;
+  margin-right: 16rpx;
+  text-align: right;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 400rpx;
+}
+
+.form-value.placeholder-text {
+  color: #9ca3af;
+}
+
+.form-arrow {
+  font-size: 48rpx;
+  color: #9ca3af;
+  flex-shrink: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  margin-left: 0;
+}
+
+.code-input-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.code-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.code-btn {
+  flex-shrink: 0;
+  height: 60rpx;
+  line-height: 60rpx;
+  padding: 0 24rpx;
+  margin-left: 16rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 30rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.code-btn::after {
+  border: none;
+}
+
+.code-btn[disabled] {
+  background: #e5e7eb;
+  opacity: 1;
+}
+
+.code-btn-text {
+  font-size: 26rpx;
+  color: #ffffff;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.code-btn[disabled] .code-btn-text {
+  color: #9ca3af;
+}
+
+/* 服务范围样式 */
+.service-range-item {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.range-content {
+  width: 100%;
+  margin-top: 20rpx;
+}
+
+.range-header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16rpx;
+}
+
+.range-value {
+  font-size: 36rpx;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.range-slider {
+  width: 100%;
+  margin: 16rpx 0;
+}
+
+.range-labels {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  padding: 0 8rpx;
+}
+
+.range-label {
+  font-size: 24rpx;
+  color: #9ca3af;
+}
+
+/* 时间选择弹窗 */
+.time-picker-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  z-index: 1000;
+}
+
+.time-picker-content {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 32rpx 32rpx 0 0;
+  overflow: hidden;
+}
+
+.time-picker-header {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32rpx 30rpx;
+  border-bottom: 1rpx solid #f3f4f6;
+}
+
+.time-picker-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.time-picker-close {
+  font-size: 36rpx;
+  color: #9ca3af;
+  padding: 8rpx;
+}
+
+.time-picker-body {
+  padding: 20rpx 30rpx;
+}
+
+.time-row {
+  margin-bottom: 30rpx;
+}
+
+.time-label {
+  font-size: 28rpx;
+  color: #6b7280;
+  margin-bottom: 16rpx;
+  display: block;
+}
+
+.time-picker-view {
+  height: 300rpx;
+  background: #f9fafb;
+  border-radius: 16rpx;
+}
+
+.time-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  color: #1f2937;
+}
+
+.time-picker-footer {
+  display: flex;
+  flex-direction: row;
+  padding: 20rpx 30rpx 40rpx;
+  gap: 20rpx;
+}
+
+.time-picker-btn {
+  flex: 1;
+  height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 44rpx;
+  font-size: 32rpx;
+  font-weight: 500;
+}
+
+.time-picker-btn.cancel {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.time-picker-btn.confirm {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  color: #ffffff;
+}
+
+/* 保存按钮 */
+.save-section {
+  padding: 40rpx 30rpx 0;
+}
+
+.save-btn {
+  width: 100%;
+  height: 100rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 50rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.3);
+  transition: all 0.3s;
+  padding: 0;
+  margin: 0;
+}
+
+.save-btn::after {
+  border: none;
+}
+
+.save-btn:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+.save-btn[disabled] {
+  opacity: 0.6;
+}
+
+.btn-text {
+  font-size: 32rpx;
+  color: #ffffff;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+}
+</style>

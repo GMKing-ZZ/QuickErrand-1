@@ -1,0 +1,897 @@
+<template>
+  <view class="chat-session-container">
+    <!-- 顶部聊天对象信息 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <view class="nav-center">
+        <text class="peer-name">{{ peerNickname }}</text>
+      </view>
+      <view class="order-btn" @click="goToOrderDetail">
+        <text class="order-icon">📋</text>
+      </view>
+    </view>
+
+    <!-- 聊天内容区域 -->
+    <scroll-view
+      class="messages-scroll"
+      scroll-y
+      :scroll-into-view="scrollIntoViewId"
+      :scroll-with-animation="true"
+    >
+      <view class="messages-wrapper">
+        <view
+          v-for="item in messages"
+          :key="item.id"
+          :id="`msg-${item.id}`"
+          class="message-row"
+          :class="item.self ? 'from-self' : 'from-peer'"
+        >
+          <view v-if="!item.self" class="avatar small-avatar">
+            <image
+              v-if="peerAvatar"
+              class="avatar-img"
+              :src="peerAvatar"
+              mode="aspectFill"
+            />
+            <text v-else class="avatar-text">{{ peerShortName }}</text>
+          </view>
+          <view class="bubble-wrapper">
+            <text class="time-label">{{ formatTime(item.sendTime) }}</text>
+            <view class="bubble" :class="item.self ? 'bubble-self' : 'bubble-peer'">
+              <text v-if="item.msgType === 1" class="bubble-text">{{ item.content }}</text>
+              <image v-else-if="item.msgType === 2" class="bubble-image" :src="item.content" mode="aspectFit" @click="previewImage(item.content)"></image>
+            </view>
+          </view>
+          <view v-if="item.self" class="avatar small-avatar self-avatar">
+            <image
+              v-if="selfAvatar"
+              class="avatar-img"
+              :src="selfAvatar"
+              mode="aspectFill"
+            />
+            <text v-else class="avatar-text">{{ selfShortName }}</text>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+
+    <!-- 底部输入区域 -->
+    <view class="input-bar">
+      <view class="input-left">
+        <button class="image-btn" @click="chooseImage">
+          <text class="image-icon">🖼️</text>
+        </button>
+        <input
+          class="chat-input"
+          v-model="inputContent"
+          type="text"
+          placeholder="输入消息..."
+          confirm-type="send"
+          @confirm="sendMessage"
+        />
+      </view>
+      <button class="send-btn" @click="sendMessage">
+        <text class="send-text">发送</text>
+      </button>
+    </view>
+  </view>
+</template>
+
+<script>
+import { userState } from '@/store/user.uts'
+import { config as requestConfig } from '@/common/utils/request.uts'
+import type { ChatMessage, ChatPeerInfo } from '@/common/api/chat.uts'
+import { getChatMessages, getChatPeerInfo } from '@/common/api/chat.uts'
+import { refreshUnreadCount } from '@/store/message.uts'
+
+// 全局维护一个聊天 WebSocket 连接，避免重复创建导致 exceed max task count
+let chatSocketTask: any = null
+let chatSocketReady = false
+let chatSocketConnecting = false
+// 消息队列，用于存储 socket 未就绪时的消息
+let messageQueue: Array<{ content: string, msgType: number }> = []
+
+export default {
+  data() {
+    return {
+      orderId: 0,
+      messages: [] as ChatMessage[],
+      peerInfo: null as ChatPeerInfo | null,
+      inputContent: '',
+      scrollIntoViewId: '',
+      loading: true,
+      // 页面是否已经卸载，防止异步回调继续操作 DOM / 状态
+      destroyed: false,
+      // 当前页面感知到的 socket 是否已就绪（用于控制发送按钮）
+      socketReady: false
+    }
+  },
+  computed: {
+    peerNickname(): string {
+      return (this.peerInfo && this.peerInfo.peerNickname) || '对方'
+    },
+    peerAvatar(): string {
+      return (this.peerInfo && this.peerInfo.peerAvatar) || ''
+    },
+    peerShortName(): string {
+      const name = this.peerNickname
+      return name ? name.charAt(0) : '对'
+    },
+    selfUserId(): number | null {
+      const info: any = userState.userInfo
+      return info ? info.id : null
+    },
+    selfShortName(): string {
+      const info: any = userState.userInfo
+      const name = (info && (info.nickname || info.username || info.phone)) || '我'
+      return name.charAt(0)
+    },
+    selfAvatar(): string {
+      const info: any = userState.userInfo
+      return (info && info.avatar) || ''
+    }
+  },
+  onLoad(options) {
+    this.destroyed = false
+    if (options.orderId) {
+      this.orderId = parseInt(options.orderId)
+      this.initChat()
+    } else {
+      uni.showToast({
+        title: '订单ID缺失',
+        icon: 'none'
+      })
+      setTimeout(() => {
+        uni.navigateBack()
+      }, 800)
+    }
+  },
+  onUnload() {
+    this.destroyed = true
+    this.closeSocket()
+  },
+  methods: {
+    goBack() {
+      // 兼容：如果当前页面是通过链接/扫码等方式直接打开，栈内只有一个页面，则 navigateBack 无法返回
+      // 此时兜底跳转到订单列表（或首页）以避免无响应
+      // @ts-ignore
+      const pages = getCurrentPages && getCurrentPages()
+      if (pages && pages.length > 1) {
+        uni.navigateBack()
+      } else {
+        // 聊天通常与订单强关联，这里优先回到订单列表 Tab
+        uni.switchTab({
+          url: '/pages/order/list'
+        })
+      }
+    },
+
+    goToOrderDetail() {
+      if (this.orderId) {
+        uni.navigateTo({
+          url: `/subpkg/order-detail?orderId=${this.orderId}`
+        })
+      }
+    },
+
+    async initChat() {
+      this.loading = true
+      try {
+        // 先加载聊天对象信息，确保订单存在且有权限
+        await this.loadPeerInfo()
+        // 加载历史消息
+        await this.loadHistory()
+        // 再发起 Socket 连接
+        this.safeConnectSocket()
+      } catch (error) {
+        // 理论上 loadPeerInfo / loadHistory 自己已经做了错误处理
+        console.error('初始化聊天数据失败:', error)
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async loadPeerInfo() {
+      try {
+        const info = await getChatPeerInfo(this.orderId)
+        this.peerInfo = info
+      } catch (error) {
+        console.error('获取聊天对象信息失败:', error)
+        uni.showToast({
+          title: '获取聊天对象信息失败，请稍后重试',
+          icon: 'none'
+        })
+        // 延迟返回，确保错误提示有足够时间显示
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        // 跳转到上一页
+        this.goBack()
+      }
+    },
+
+    async loadHistory() {
+      try {
+        const list = await getChatMessages(this.orderId)
+        this.messages = list || []
+        this.$nextTick(() => {
+          if (!this.destroyed) {
+            this.scrollToBottom()
+          }
+        })
+        refreshUnreadCount()
+      } catch (error) {
+        console.error('获取聊天记录失败:', error)
+      }
+    },
+
+    safeConnectSocket() {
+      try {
+        this.connectSocket()
+      } catch (error) {
+        console.error('建立聊天 WebSocket 连接失败:', error)
+        // 不再弹“聊天初始化失败”，只记录日志，页面仍可展示历史记录
+      }
+    },
+
+    // 处理消息队列
+    processMessageQueue() {
+      if (!chatSocketTask || !chatSocketReady) return
+      
+      console.log('[chat] processMessageQueue: queue length =', messageQueue.length)
+      
+      while (messageQueue.length > 0) {
+        const message = messageQueue.shift()
+        if (message) {
+          const data = JSON.stringify(message)
+          console.log('[chat] processMessageQueue: sending queued message =', data)
+          
+          try {
+            if (chatSocketTask && typeof (chatSocketTask as any).send === 'function') {
+              ;(chatSocketTask as any).send({
+                data,
+                success: () => {
+                  console.log('[chat] SocketTask.send success for queued message')
+                },
+                fail: (err: any) => {
+                  console.error('[chat] SocketTask.send fail for queued message:', err)
+                  // 失败时退回到全局 socket 发送
+                  // @ts-ignore
+                  uni.sendSocketMessage({
+                    data,
+                    success: () => {
+                      console.log('[chat] fallback uni.sendSocketMessage success for queued message')
+                    },
+                    fail: (err2: any) => {
+                      console.error('[chat] fallback uni.sendSocketMessage fail for queued message:', err2)
+                    }
+                  })
+                }
+              } as any)
+            } else {
+              // 某些端（如微信小程序）可能不暴露 SocketTask 的 send 方法，直接使用全局 API 发送
+              // @ts-ignore
+              uni.sendSocketMessage({
+                data,
+                success: () => {
+                  console.log('[chat] uni.sendSocketMessage success for queued message (no SocketTask.send)')
+                },
+                fail: (err: any) => {
+                  console.error('[chat] uni.sendSocketMessage fail for queued message:', err)
+                }
+              })
+            }
+          } catch (e) {
+            console.error('发送队列消息异常:', e)
+          }
+        }
+      }
+    },
+
+    connectSocket() {
+      const token = userState.token
+      if (!token) {
+        uni.showToast({
+          title: '请先登录',
+          icon: 'none'
+        })
+        return
+      }
+
+      // 已有连接或正在连接时直接返回，避免 exceed max task count
+      if (chatSocketTask || chatSocketConnecting) {
+        return
+      }
+
+      // 从 HTTP 基础地址转换为 WS 地址
+      const base = requestConfig.baseURL // 例如 http://localhost:8088/api
+      const wsProtocol = base.startsWith('https') ? 'wss' : 'ws'
+      // 注意：后端 context path 是 /api，WebSocket 路径也需要包含 /api 前缀
+      // 所以只替换协议，不移除 /api 后缀
+      const wsBase = base.replace(/^https?/, wsProtocol)
+      const url = `${wsBase}/ws/chat?token=${encodeURIComponent(token)}&orderId=${this.orderId}`
+      
+      console.log('[chat] WebSocket connecting to:', url)
+
+      chatSocketConnecting = true
+
+      // 使用uni.connectSocket建立WebSocket连接
+      const socketTask: any = uni.connectSocket({
+        url,
+        success: () => {
+          console.log('[chat] uni.connectSocket success')
+        },
+        fail: (err: any) => {
+          console.error('[chat] uni.connectSocket fail:', err)
+          chatSocketTask = null
+          chatSocketReady = false
+          chatSocketConnecting = false
+          this.socketReady = false
+        }
+      })
+
+      chatSocketTask = socketTask
+
+      // 使用 SocketTask 的实例方法监听事件（微信小程序推荐方式）
+      if (socketTask && typeof socketTask.onOpen === 'function') {
+        socketTask.onOpen(() => {
+          console.log('[chat] SocketTask.onOpen: 聊天 WebSocket 已连接')
+          chatSocketReady = true
+          chatSocketConnecting = false
+          this.socketReady = true
+          this.processMessageQueue()
+        })
+
+        socketTask.onMessage((res: any) => {
+          try {
+            const data = JSON.parse(res.data as string) as ChatMessage
+            this.messages.push(data)
+            this.$nextTick(() => {
+              if (!this.destroyed) {
+                this.scrollToBottom()
+              }
+            })
+          } catch (e) {
+            console.error('[chat] 解析聊天消息失败:', e)
+          }
+        })
+
+        socketTask.onClose(() => {
+          console.log('[chat] SocketTask.onClose: 聊天 WebSocket 已关闭')
+          chatSocketTask = null
+          chatSocketReady = false
+          chatSocketConnecting = false
+          this.socketReady = false
+        })
+
+        socketTask.onError((err: any) => {
+          console.error('[chat] SocketTask.onError: 聊天 WebSocket 出错:', err)
+          chatSocketTask = null
+          chatSocketReady = false
+          chatSocketConnecting = false
+          this.socketReady = false
+        })
+      } else {
+        // 兼容不支持 SocketTask 实例方法的情况，使用全局回调
+        console.log('[chat] 使用全局回调方式')
+        uni.onSocketOpen(() => {
+          console.log('[chat] uni.onSocketOpen: 聊天 WebSocket 已连接')
+          chatSocketReady = true
+          chatSocketConnecting = false
+          this.socketReady = true
+          this.processMessageQueue()
+        })
+
+        uni.onSocketMessage((res: any) => {
+          try {
+            const data = JSON.parse(res.data as string) as ChatMessage
+            this.messages.push(data)
+            this.$nextTick(() => {
+              if (!this.destroyed) {
+                this.scrollToBottom()
+              }
+            })
+          } catch (e) {
+            console.error('[chat] 解析聊天消息失败:', e)
+          }
+        })
+
+        uni.onSocketClose(() => {
+          console.log('[chat] uni.onSocketClose: 聊天 WebSocket 已关闭')
+          chatSocketTask = null
+          chatSocketReady = false
+          chatSocketConnecting = false
+          this.socketReady = false
+        })
+
+        uni.onSocketError((err: any) => {
+          console.error('[chat] uni.onSocketError: 聊天 WebSocket 出错:', err)
+          chatSocketTask = null
+          chatSocketReady = false
+          chatSocketConnecting = false
+          this.socketReady = false
+        })
+      }
+    },
+
+    closeSocket() {
+      try {
+        if (chatSocketTask && typeof chatSocketTask.close === 'function') {
+          chatSocketTask.close()
+        }
+      } catch (e) {
+        console.error('关闭聊天 WebSocket 发生异常:', e)
+      } finally {
+        chatSocketTask = null
+        chatSocketReady = false
+        chatSocketConnecting = false
+        this.socketReady = false
+      }
+    },
+
+    sendMessage() {
+      const content = this.inputContent.trim()
+      if (!content) {
+        console.log('[chat] sendMessage: empty content, ignore')
+        return
+      }
+
+      // 如果还没创建连接或尚未就绪，先尝试建立连接并将消息加入队列
+      if (!chatSocketTask || !chatSocketReady) {
+        console.warn('[chat] sendMessage: socket not ready, try reconnect')
+        uni.showToast({
+          title: '聊天连接中，消息将自动发送',
+          icon: 'none'
+        })
+        // 将消息加入队列
+        messageQueue.push({ content, msgType: 1 })
+        this.safeConnectSocket()
+        this.inputContent = ''
+        return
+      }
+
+      const data = JSON.stringify({ content, msgType: 1 })
+      console.log('[chat] sendMessage: try send data =', data)
+
+      try {
+        if (chatSocketTask && typeof (chatSocketTask as any).send === 'function') {
+          ;(chatSocketTask as any).send({
+            data,
+            success: () => {
+              console.log('[chat] SocketTask.send success')
+            },
+            fail: (err: any) => {
+              console.error('[chat] SocketTask.send fail:', err)
+              // 失败时退回到全局 socket 发送一遍，增强兼容性（特别是小程序端）
+              // @ts-ignore
+              uni.sendSocketMessage({
+                data,
+                success: () => {
+                  console.log('[chat] fallback uni.sendSocketMessage success')
+                },
+                fail: (err2: any) => {
+                  console.error('[chat] fallback uni.sendSocketMessage fail:', err2)
+                  uni.showToast({
+                    title: '发送失败，请稍后重试',
+                    icon: 'none'
+                  })
+                }
+              })
+            }
+          } as any)
+        } else {
+          // 某些端（如微信小程序）可能不暴露 SocketTask 的 send 方法，直接使用全局 API 发送
+          // @ts-ignore
+          uni.sendSocketMessage({
+            data,
+            success: () => {
+              console.log('[chat] uni.sendSocketMessage success (no SocketTask.send)')
+            },
+            fail: (err: any) => {
+              console.error('[chat] uni.sendSocketMessage fail:', err)
+              uni.showToast({
+                title: '发送失败，请稍后重试',
+                icon: 'none'
+              })
+            }
+          })
+        }
+        this.inputContent = ''
+      } catch (e) {
+        console.error('发送聊天消息异常:', e)
+        uni.showToast({
+          title: '发送失败，请稍后重试',
+          icon: 'none'
+        })
+      }
+    },
+
+    chooseImage() {
+      uni.chooseImage({
+        count: 1,
+        sizeType: ['original', 'compressed'],
+        sourceType: ['album', 'camera'],
+        success: (res) => {
+          this.uploadImage(res.tempFilePaths[0])
+        },
+        fail: (err) => {
+          console.error('选择图片失败:', err)
+        }
+      })
+    },
+
+    uploadImage(tempFilePath) {
+      uni.uploadFile({
+        url: `${requestConfig.baseURL}/chat/upload`,
+        filePath: tempFilePath,
+        name: 'file',
+        formData: {
+          orderId: this.orderId.toString()
+        },
+        header: {
+          'Authorization': `Bearer ${userState.token}`
+        },
+        success: (res) => {
+          try {
+            const data = JSON.parse(res.data)
+            if (data.code === 200 && data.data) {
+              this.sendImageMessage(data.data)
+            } else {
+              uni.showToast({
+                title: '上传失败，请稍后重试',
+                icon: 'none'
+              })
+            }
+          } catch (e) {
+            console.error('解析上传结果失败:', e)
+            uni.showToast({
+              title: '上传失败，请稍后重试',
+              icon: 'none'
+            })
+          }
+        },
+        fail: (err) => {
+          console.error('上传图片失败:', err)
+          uni.showToast({
+            title: '上传失败，请稍后重试',
+            icon: 'none'
+          })
+        }
+      })
+    },
+
+    sendImageMessage(imageUrl) {
+      // 如果还没创建连接或尚未就绪，先尝试建立连接并将消息加入队列
+      if (!chatSocketTask || !chatSocketReady) {
+        console.warn('[chat] sendImageMessage: socket not ready, try reconnect')
+        uni.showToast({
+          title: '聊天连接中，图片将自动发送',
+          icon: 'none'
+        })
+        // 将消息加入队列
+        messageQueue.push({ content: imageUrl, msgType: 2 })
+        this.safeConnectSocket()
+        return
+      }
+
+      const data = JSON.stringify({ content: imageUrl, msgType: 2 })
+      console.log('[chat] sendImageMessage: try send data =', data)
+
+      try {
+        if (chatSocketTask && typeof (chatSocketTask as any).send === 'function') {
+          ;(chatSocketTask as any).send({
+            data,
+            success: () => {
+              console.log('[chat] SocketTask.send success')
+            },
+            fail: (err: any) => {
+              console.error('[chat] SocketTask.send fail:', err)
+              // 失败时退回到全局 socket 发送一遍，增强兼容性（特别是小程序端）
+              // @ts-ignore
+              uni.sendSocketMessage({
+                data,
+                success: () => {
+                  console.log('[chat] fallback uni.sendSocketMessage success')
+                },
+                fail: (err2: any) => {
+                  console.error('[chat] fallback uni.sendSocketMessage fail:', err2)
+                  uni.showToast({
+                    title: '发送失败，请稍后重试',
+                    icon: 'none'
+                  })
+                }
+              })
+            }
+          } as any)
+        } else {
+          // 某些端（如微信小程序）可能不暴露 SocketTask 的 send 方法，直接使用全局 API 发送
+          // @ts-ignore
+          uni.sendSocketMessage({
+            data,
+            success: () => {
+              console.log('[chat] uni.sendSocketMessage success (no SocketTask.send)')
+            },
+            fail: (err: any) => {
+              console.error('[chat] uni.sendSocketMessage fail:', err)
+              uni.showToast({
+                title: '发送失败，请稍后重试',
+                icon: 'none'
+              })
+            }
+          })
+        }
+      } catch (e) {
+        console.error('发送图片消息异常:', e)
+        uni.showToast({
+          title: '发送失败，请稍后重试',
+          icon: 'none'
+        })
+      }
+    },
+
+    scrollToBottom() {
+      if (!this.messages.length) return
+      const last = this.messages[this.messages.length - 1]
+      this.scrollIntoViewId = `msg-${last.id}`
+    },
+
+    formatTime(ts: number): string {
+      if (!ts) return ''
+      const d = new Date(ts)
+      const h = d.getHours()
+      const m = String(d.getMinutes()).padStart(2, '0')
+      return `${h}:${m}`
+    },
+
+    previewImage(imageUrl) {
+      uni.previewImage({
+        urls: [imageUrl],
+        current: imageUrl
+      })
+    }
+  }
+}
+</script>
+
+<style scoped>
+.chat-session-container {
+  min-height: 100vh;
+  background: #f3f4f6;
+  display: flex;
+  flex-direction: column;
+}
+
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  z-index: 100;
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+}
+
+.nav-center {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+}
+
+.peer-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #ffffff;
+  max-width: 400rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.order-icon {
+  font-size: 32rpx;
+  color: #ffffff;
+}
+
+.messages-scroll {
+  flex: 1;
+  padding: 20rpx 20rpx 20rpx;
+  box-sizing: border-box;
+  padding-top: 160rpx;
+  padding-bottom: 160rpx;
+}
+
+.messages-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  padding-bottom: 60rpx;
+}
+
+.message-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+}
+
+.from-peer {
+  justify-content: flex-start;
+}
+
+.from-self {
+  justify-content: flex-end;
+}
+
+.avatar {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 32rpx;
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 32rpx;
+}
+
+.small-avatar {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 28rpx;
+  margin: 0 12rpx;
+}
+
+.self-avatar {
+  margin-left: 12rpx;
+}
+
+.avatar-text {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.bubble-wrapper {
+  max-width: 70%;
+  display: flex;
+  flex-direction: column;
+}
+
+.time-label {
+  font-size: 20rpx;
+  color: #9ca3af;
+  margin-bottom: 4rpx;
+}
+
+.bubble {
+  padding: 14rpx 18rpx;
+  border-radius: 18rpx;
+  box-shadow: 0 2rpx 6rpx rgba(15, 23, 42, 0.12);
+}
+
+.bubble-peer {
+  background: #ffffff;
+  border-top-left-radius: 4rpx;
+}
+
+.bubble-self {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-top-right-radius: 4rpx;
+}
+
+.bubble-text {
+  font-size: 28rpx;
+  color: #111827;
+  line-height: 1.6;
+}
+
+.bubble-image {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 12rpx;
+}
+
+.bubble-self .bubble-text {
+  color: #ffffff;
+}
+
+.input-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12rpx 16rpx calc(12rpx + env(safe-area-inset-bottom, 0));
+  background: #ffffff;
+  border-top: 1rpx solid #e5e7eb;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+  z-index: 100;
+}
+
+.input-left {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.image-btn {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+}
+
+.image-icon {
+  font-size: 32rpx;
+}
+
+.chat-input {
+  flex: 1;
+  min-height: 72rpx;
+  padding: 0 20rpx;
+  border-radius: 999rpx;
+  background: #f3f4f6;
+  font-size: 28rpx;
+  color: #111827;
+}
+
+.send-btn {
+  width: 140rpx;
+  height: 72rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+}
+
+.send-text {
+  font-size: 28rpx;
+  color: #ffffff;
+  font-weight: 500;
+}
+</style>
+

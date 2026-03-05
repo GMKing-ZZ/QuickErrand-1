@@ -1,0 +1,431 @@
+<template>
+  <view class="reviews-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="navbar-inner">
+        <view class="back-btn" @click="goBack">
+          <text class="back-icon">‹</text>
+        </view>
+        <text class="nav-title">我的评价</text>
+        <view class="right-placeholder"></view>
+      </view>
+    </view>
+
+    <!-- 评价列表 -->
+    <view class="reviews-list">
+      <view v-if="loading" class="loading-wrapper">
+        <text class="loading-text">加载中...</text>
+      </view>
+
+      <view v-else-if="reviewList.length === 0" class="empty-wrapper">
+        <text class="empty-text">暂无评价记录</text>
+      </view>
+
+      <view v-else>
+        <view
+          v-for="review in reviewList"
+          :key="review.id"
+          class="review-item"
+          @click="goToOrderDetail(review.orderId)"
+        >
+          <view class="review-header">
+            <text class="order-no">订单编号：{{ review.orderNo }}</text>
+            <text class="review-time">{{ formatTime(review.createTime) }}</text>
+          </view>
+
+          <view class="review-content">
+            <view class="runner-info">
+              <text class="runner-label">跑腿员：</text>
+              <text class="runner-name">{{ review.runnerName || '未知' }}</text>
+            </view>
+
+            <view class="score-section">
+              <view class="score-item">
+                <text class="score-label">服务质量：</text>
+                <view class="stars">
+                  <text
+                    v-for="star in 5"
+                    :key="star"
+                    class="star"
+                    :class="{ active: star <= review.serviceScore }"
+                  >★</text>
+                </view>
+              </view>
+              <view class="score-item">
+                <text class="score-label">服务态度：</text>
+                <view class="stars">
+                  <text
+                    v-for="star in 5"
+                    :key="star"
+                    class="star"
+                    :class="{ active: star <= review.attitudeScore }"
+                  >★</text>
+                </view>
+              </view>
+            </view>
+
+            <view v-if="review.tags && parseTags(review.tags).length > 0" class="review-tags">
+              <view
+                v-for="(tag, index) in parseTags(review.tags)"
+                :key="index"
+                class="tag-item"
+              >
+                <text class="tag-text">{{ tag }}</text>
+              </view>
+            </view>
+
+            <view v-if="review.content" class="review-text">
+              <text class="text-content">{{ review.content }}</text>
+            </view>
+
+            <view v-if="review.images" class="review-images">
+              <image
+                v-for="(img, index) in parseImages(review.images)"
+                :key="index"
+                class="review-image"
+                :src="img"
+                mode="aspectFill"
+                @click.stop="previewImage(img, parseImages(review.images))"
+              />
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 加载更多 -->
+      <view v-if="hasMore && !loading" class="load-more" @click="loadMore">
+        <text class="load-more-text">加载更多</text>
+      </view>
+      <view v-if="!hasMore && reviewList.length > 0" class="no-more">
+        <text class="no-more-text">没有更多了</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getMyReviews, type ReviewInfo } from '@/common/api/user.uts'
+
+export default {
+  data() {
+    return {
+      reviewList: [] as ReviewInfo[],
+      loading: false,
+      pageNum: 1,
+      pageSize: 10,
+      total: 0,
+      hasMore: true
+    }
+  },
+  onLoad() {
+    this.loadReviews()
+  },
+  onPullDownRefresh() {
+    this.pageNum = 1
+    this.hasMore = true
+    this.loadReviews()
+  },
+  methods: {
+    async loadReviews() {
+      if (this.loading) return
+      if (!this.hasMore && this.pageNum > 1) return
+
+      this.loading = true
+      try {
+        const res = await getMyReviews(this.pageNum, this.pageSize)
+        this.total = res.total
+
+        if (this.pageNum === 1) {
+          this.reviewList = res.records
+        } else {
+          this.reviewList = this.reviewList.concat(res.records)
+        }
+
+        this.hasMore = this.reviewList.length < this.total
+      } catch (error) {
+        console.error('获取评价列表失败:', error)
+        uni.showToast({
+          title: '加载失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+        uni.stopPullDownRefresh()
+      }
+    },
+
+    loadMore() {
+      if (!this.hasMore || this.loading) return
+      this.pageNum++
+      this.loadReviews()
+    },
+
+    goBack() {
+      uni.navigateBack()
+    },
+
+    goToOrderDetail(orderId: number) {
+      uni.navigateTo({
+        url: `/subpkg/order-detail?orderId=${orderId}`
+      })
+    },
+
+    formatTime(time: string): string {
+      if (!time) return ''
+      const date = new Date(time)
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hour = String(date.getHours()).padStart(2, '0')
+      const minute = String(date.getMinutes()).padStart(2, '0')
+      return `${year}-${month}-${day} ${hour}:${minute}`
+    },
+
+    parseImages(images: string): string[] {
+      if (!images) return []
+      try {
+        return JSON.parse(images)
+      } catch (e) {
+        return []
+      }
+    },
+
+    parseTags(tags: string): string[] {
+      if (!tags) return []
+      try {
+        return JSON.parse(tags)
+      } catch (e) {
+        return []
+      }
+    },
+
+    previewImage(current: string, urls: string[]) {
+      uni.previewImage({
+        current: current,
+        urls: urls
+      })
+    }
+  }
+}
+</script>
+
+<style scoped>
+.reviews-container {
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding-bottom: 30rpx;
+}
+
+/* 导航栏 */
+.navbar {
+  padding-top: env(safe-area-inset-top);
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  box-shadow: 0 4rpx 16rpx rgba(37, 99, 235, 0.25);
+}
+
+.navbar-inner {
+  height: 88rpx;
+  padding: 0 30rpx 16rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-icon {
+  font-size: 36rpx;
+  color: #ffffff;
+}
+
+.nav-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.right-placeholder {
+  width: 64rpx;
+}
+
+/* 评价列表 */
+.reviews-list {
+  padding: 20rpx 30rpx;
+}
+
+.loading-wrapper,
+.empty-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 120rpx 0;
+}
+
+.loading-text,
+.empty-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+.review-item {
+  background: #ffffff;
+  border-radius: 20rpx;
+  padding: 30rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+  padding-bottom: 20rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.order-no {
+  font-size: 28rpx;
+  color: #333333;
+  font-weight: 500;
+}
+
+.review-time {
+  font-size: 24rpx;
+  color: #999999;
+}
+
+.review-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  width: 100%;
+}
+
+.runner-info {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  width: 100%;
+}
+
+.runner-label {
+  font-size: 26rpx;
+  color: #666666;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+}
+
+.runner-name {
+  font-size: 26rpx;
+  color: #2563eb;
+  font-weight: 500;
+  flex: 1;
+}
+
+.score-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  width: 100%;
+}
+
+.score-item {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  width: 100%;
+}
+
+.score-label {
+  font-size: 26rpx;
+  color: #666666;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+  width: 120rpx;
+}
+
+.stars {
+  display: flex;
+  flex-direction: row;
+  gap: 4rpx;
+  align-items: center;
+}
+
+.star {
+  font-size: 28rpx;
+  color: #e0e0e0;
+  line-height: 1;
+}
+
+.star.active {
+  color: #ffd700;
+}
+
+.review-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.tag-item {
+  padding: 10rpx 20rpx;
+  background: #e3f2fd;
+  border-radius: 30rpx;
+  border: 1rpx solid #90caf9;
+}
+
+.tag-text {
+  font-size: 24rpx;
+  color: #1976d2;
+}
+
+.review-text {
+  background: #f9fafb;
+  padding: 20rpx;
+  border-radius: 12rpx;
+}
+
+.text-content {
+  font-size: 28rpx;
+  color: #333333;
+  line-height: 1.6;
+}
+
+.review-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.review-image {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 12rpx;
+  background: #f0f0f0;
+}
+
+/* 加载更多 */
+.load-more,
+.no-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30rpx 0;
+}
+
+.load-more-text,
+.no-more-text {
+  font-size: 26rpx;
+  color: #999999;
+}
+</style>

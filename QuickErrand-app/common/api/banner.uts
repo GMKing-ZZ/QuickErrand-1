@@ -1,0 +1,28 @@
+/**
+ * 轮播图相关API
+ */
+import { get } from '../utils/request.uts'
+
+/**
+ * 轮播图信息
+ */
+export type BannerInfo = {
+  id : number
+  title : string
+  imageUrl : string
+  linkUrl ?: string
+  sortOrder : number
+  status : number
+  position : number
+  createTime : string
+  updateTime : string
+}
+
+/**
+ * 获取轮播图列表
+ * @param position 展示位置：1-首页 2-个人中心，不传则返回所有位置的轮播图
+ */
+export const getBannerList = (position ?: number) : Promise<BannerInfo[]> => {
+  const params = position !== null && position !== undefined ? { position } : {}
+  return get<BannerInfo[]>('/banner/list', params)
+}

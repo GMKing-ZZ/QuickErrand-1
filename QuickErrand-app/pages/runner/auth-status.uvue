@@ -1,0 +1,515 @@
+<template>
+  <view class="auth-status-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">←</text>
+      </view>
+      <text class="nav-title">认证状态</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 加载中 -->
+    <view v-if="loading" class="loading-wrapper">
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <!-- 未申请 -->
+    <view v-else-if="!authInfo" class="empty-wrapper">
+      <text class="empty-icon">📝</text>
+      <text class="empty-text">您还未申请跑腿员认证</text>
+      <button class="apply-btn" @click="goToApply">
+        <text class="btn-text">立即申请</text>
+      </button>
+    </view>
+
+    <!-- 已申请 -->
+    <view v-else class="content-wrapper">
+      <!-- 状态卡片 -->
+      <view class="status-card" :class="getStatusClass()">
+        <view class="status-header">
+          <text class="status-icon">{{ getStatusIcon() }}</text>
+          <view class="status-info">
+            <text class="status-title">{{ authInfo.certStatusText }}</text>
+            <text class="status-desc">{{ getStatusDesc() }}</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 认证信息 -->
+      <view class="info-section">
+        <text class="section-title">认证信息</text>
+
+        <view class="info-line">
+          <text class="info-line-text">真实姓名：{{ authInfo.realName }}</text>
+        </view>
+
+        <view class="info-line">
+          <text class="info-line-text">身份证号码：{{ maskIdCard(authInfo.idCard) }}</text>
+        </view>
+
+        <view class="info-line">
+          <text class="info-line-text">申请时间：{{ formatTime(authInfo.createTime) }}</text>
+        </view>
+
+        <view v-if="authInfo.certTime" class="info-item">
+          <text class="info-label">认证时间</text>
+          <text class="info-value">{{ formatTime(authInfo.certTime) }}</text>
+        </view>
+
+        <view v-if="authInfo.rejectReason" class="info-item reject-reason">
+          <text class="info-label">驳回原因</text>
+          <text class="info-value reject-text">{{ authInfo.rejectReason }}</text>
+        </view>
+      </view>
+
+      <!-- 身份证照片 -->
+      <view class="photos-section">
+        <text class="section-title">身份证照片</text>
+        <view class="photos-wrapper">
+          <view class="photo-item" @click="previewImage(authInfo.idCardFront)">
+            <image class="photo-image" :src="authInfo.idCardFront" mode="aspectFill" />
+            <text class="photo-label">正面</text>
+          </view>
+          <view class="photo-item" @click="previewImage(authInfo.idCardBack)">
+            <image class="photo-image" :src="authInfo.idCardBack" mode="aspectFill" />
+            <text class="photo-label">反面</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 跑腿员信息（已认证时显示） -->
+      <view v-if="authInfo.certStatus === 2" class="runner-section">
+        <text class="section-title">跑腿员信息</text>
+
+        <view class="info-item">
+          <text class="info-label">信用等级</text>
+          <text class="info-value">{{ authInfo.creditLevel }}星</text>
+        </view>
+
+        <view class="info-item">
+          <text class="info-label">完成订单</text>
+          <text class="info-value">{{ authInfo.totalOrders }}单</text>
+        </view>
+
+        <view class="info-item">
+          <text class="info-label">好评率</text>
+          <text class="info-value">{{ formatGoodRate(authInfo.goodRate) }}</text>
+        </view>
+
+        <view class="info-item">
+          <text class="info-label">服务范围</text>
+          <text class="info-value">{{ formatServiceRange(authInfo.serviceRange) }}</text>
+        </view>
+      </view>
+
+      <!-- 操作按钮 -->
+      <view v-if="authInfo.certStatus === 2 || authInfo.certStatus === 3" class="action-section">
+        <button class="reapply-btn" @click="goToApply">
+          <text class="btn-text">{{ authInfo.certStatus === 2 ? '重新认证' : '重新申请' }}</text>
+        </button>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getRunnerAuthInfo } from '@/common/api/runner.uts'
+import { userState } from '@/store/user.uts'
+import { formatDateTime } from '@/common/utils/common.uts'
+
+export default {
+  data() {
+    return {
+      loading: true,
+      authInfo: null as any
+    }
+  },
+  onLoad() {
+    this.checkRunnerAccessAndLoad()
+  },
+  methods: {
+    formatTime(time: string | null | undefined): string {
+      if (!time) return ''
+      return formatDateTime(time)
+    },
+    goBack() {
+      uni.navigateBack()
+    },
+
+    checkRunnerAccessAndLoad() {
+      const info: any = userState.userInfo
+      if (!info || info.userType !== 2) {
+        uni.showModal({
+          title: '提示',
+          content: '当前账号不是跑腿员，无法查看认证状态',
+          showCancel: false,
+          success: () => {
+            uni.navigateBack()
+          }
+        })
+        return
+      }
+      this.loadAuthInfo()
+    },
+
+    async loadAuthInfo() {
+      this.loading = true
+      try {
+        this.authInfo = await getRunnerAuthInfo()
+      } catch (error) {
+        console.error('获取认证信息失败:', error)
+      } finally {
+        this.loading = false
+      }
+    },
+
+    getStatusClass(): string {
+      if (!this.authInfo) return ''
+      switch (this.authInfo.certStatus) {
+        case 1:
+          return 'status-pending'
+        case 2:
+          return 'status-approved'
+        case 3:
+          return 'status-rejected'
+        default:
+          return ''
+      }
+    },
+
+    getStatusIcon(): string {
+      if (!this.authInfo) return ''
+      switch (this.authInfo.certStatus) {
+        case 1:
+          return '⏳'
+        case 2:
+          return '✅'
+        case 3:
+          return '❌'
+        default:
+          return '📝'
+      }
+    },
+
+    getStatusDesc(): string {
+      if (!this.authInfo) return ''
+      switch (this.authInfo.certStatus) {
+        case 1:
+          return '您的认证申请正在审核中，请耐心等待'
+        case 2:
+          return '恭喜您已通过认证，可以开始接单了'
+        case 3:
+          return '很抱歉，您的认证申请未通过'
+        default:
+          return ''
+      }
+    },
+
+    previewImage(url: string) {
+      uni.previewImage({
+        urls: [url],
+        current: url
+      })
+    },
+
+    // 身份证号脱敏：保留前4位和后4位，中间使用 * 替代
+    maskIdCard(id: string | null | undefined): string {
+      if (!id) return ''
+      if (id.length <= 8) return id
+      return id.substring(0, 4) + '********' + id.substring(id.length - 4)
+    },
+
+    // 好评率格式化：数据库中为两位小数的百分值，例如 95.50，页面统一显示为 95.50%
+    formatGoodRate(rate: number | null | undefined): string {
+      if (rate === null || rate === undefined) {
+        return '--'
+      }
+      return Number(rate).toFixed(2) + '%'
+    },
+
+    // 服务范围格式化：数据库为米，页面展示为 km，保留 1 位小数
+    formatServiceRange(range: number | null | undefined): string {
+      if (!range && range !== 0) {
+        return '—'
+      }
+      const km = Number(range) / 1000
+      return km.toFixed(1) + 'km'
+    },
+
+    goToApply() {
+      uni.navigateTo({
+        url: '/pages/runner/auth-apply?reapply=true'
+      })
+    }
+  }
+}
+</script>
+
+<style scoped>
+.auth-status-container {
+  min-height: 100vh;
+  background: #f9fafb;
+}
+
+/* 导航栏 */
+.navbar {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.placeholder {
+  width: 64rpx;
+}
+
+/* 加载中 */
+.loading-wrapper {
+  padding: 200rpx 0;
+  display: flex;
+  justify-content: center;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 空状态 */
+.empty-wrapper {
+  padding: 200rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30rpx;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+.apply-btn {
+  width: 300rpx;
+  height: 80rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 40rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-text {
+  font-size: 28rpx;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+/* 内容区域 */
+.content-wrapper {
+  padding: 30rpx;
+}
+
+/* 状态卡片 */
+.status-card {
+  padding: 40rpx;
+  background: #ffffff;
+  border-radius: 20rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  gap: 30rpx;
+}
+
+.status-icon {
+  font-size: 80rpx;
+}
+
+.status-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.status-title {
+  font-size: 36rpx;
+  font-weight: bold;
+}
+
+.status-desc {
+  font-size: 26rpx;
+  color: #666666;
+  line-height: 1.6;
+}
+
+.status-pending {
+  border-left: 8rpx solid #ffc107;
+}
+
+.status-pending .status-title {
+  color: #ffc107;
+}
+
+.status-approved {
+  border-left: 8rpx solid #4caf50;
+}
+
+.status-approved .status-title {
+  color: #4caf50;
+}
+
+.status-rejected {
+  border-left: 8rpx solid #f44336;
+}
+
+.status-rejected .status-title {
+  color: #f44336;
+}
+
+/* 信息区域 */
+.info-section,
+.photos-section,
+.runner-section {
+  padding: 30rpx;
+  background: #ffffff;
+  border-radius: 20rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.section-title {
+  display: block;
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333333;
+  margin-bottom: 30rpx;
+}
+
+.info-line {
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.info-line:last-child {
+  border-bottom-width: 0;
+}
+
+.info-line-text {
+  font-size: 28rpx;
+  color: #333333;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 25rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.info-item:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-size: 28rpx;
+  color: #666666;
+}
+
+.info-value {
+  font-size: 28rpx;
+  color: #333333;
+  font-weight: 500;
+}
+
+.reject-reason {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 15rpx;
+}
+
+.reject-text {
+  color: #f44336;
+  line-height: 1.6;
+}
+
+/* 照片区域 */
+.photos-wrapper {
+  display: flex;
+  gap: 30rpx;
+}
+
+.photo-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15rpx;
+}
+
+.photo-image {
+  width: 100%;
+  height: 300rpx;
+  border-radius: 15rpx;
+}
+
+.photo-label {
+  font-size: 26rpx;
+  color: #666666;
+  text-align: center;
+}
+
+/* 操作区域 */
+.action-section {
+  padding: 30rpx;
+}
+
+.reapply-btn {
+  width: 100%;
+  height: 100rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 50rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10rpx 30rpx rgba(79, 172, 254, 0.4);
+}
+</style>

@@ -1,0 +1,263 @@
+<script lang="uts">
+  import { state, setLifeCycleNum, checkSystemTheme, setNetless } from '@/store/index.uts'
+  import { getAmapKey, setAmapKey } from '@/common/config/map.uts'
+
+  // #ifdef APP-ANDROID || APP-HARMONY
+  let firstBackTime = 0
+  // #endif
+  export default {
+    globalData: {
+      str: 'default globalData str',
+      num: 0,
+      bool: false,
+      obj: {
+        str: 'default globalData obj str',
+        num: 0,
+        bool: false,
+      } as UTSJSONObject,
+      null: null as string | null,
+      arr: [] as number[],
+      mySet: new Set<string>(),
+      myMap: new Map<string, any>(),
+      func: () : string => {
+        return 'globalData func'
+      },
+      launchOptions: {
+        path: '',
+      } as OnLaunchOptions,
+      onShowOption: {
+        path: ''
+      } as OnShowOptions,
+      // 地图配置
+      amapKey: '' as string
+    },
+    onLaunch: function (res : OnLaunchOptions) {
+
+      this.globalData.launchOptions = res
+      
+      // 从map.uts中读取高德地图key并设置到globalData
+      // map.uts中的值应该通过构建脚本从manifest.json自动生成
+      // 运行构建脚本：node scripts/read-manifest-key.js
+      try {
+        const amapKey = getAmapKey()
+        if (amapKey) {
+          this.globalData.amapKey = amapKey
+          setAmapKey(amapKey)
+          console.log('高德地图Key已从配置中加载')
+        } else {
+          console.warn('高德地图Key未配置，请在manifest.json中配置web.sdkConfigs.maps.amap.key')
+        }
+      } catch (e) {
+        console.warn('读取高德地图Key配置失败:', e)
+        // 如果读取失败，尝试从本地存储读取
+        try {
+          const storedKey = uni.getStorageSync('amapKey')
+          if (storedKey) {
+            this.globalData.amapKey = storedKey
+            setAmapKey(storedKey)
+          }
+        } catch (e2) {
+          console.warn('从本地存储读取高德地图Key失败:', e2)
+        }
+      }
+
+      // 自动化测试
+      setLifeCycleNum(state.lifeCycleNum + 1000)
+      console.log('App Launch')
+
+      // 页面性能分析
+      // const performance = uni.getPerformance()
+      // const observer1: PerformanceObserver = performance.createObserver(
+      //   (entryList: PerformanceObserverEntryList) => {
+      //     console.log('observer1:entryList.getEntries()' +JSON.stringify(entryList.getEntries()))
+      //   }
+      // )
+      // observer1.observe({
+      //   entryTypes: ['render', 'navigation'],
+      // } as PerformanceObserverOptions)
+      // 统计上报 - 应用启动（已禁用）
+      // #ifdef APP-ANDROID || APP-IOS || WEB || MP-WEIXIN || APP-HARMONY
+      // uni.report({
+      // 	name: 'uni-app-launch',
+      // 	options: res,
+      // 	success(res_data) {
+      // 		console.log(res_data);
+      // 	}, fail(err) {
+      // 		console.log(err);
+      // 	}
+      // })
+      // #endif
+      // #ifdef APP
+      if (process.env.NODE_ENV !== 'development') {
+        uni.getPrivacySetting({
+          success(res1){
+             if(res1.needAuthorization){
+               uni.openDialogPage({
+                 url: '/pages/common/privacy',
+               })
+             }
+          }
+        })
+      }
+      // #endif
+      // #ifdef MP-WEIXIN
+      if (wx.getPrivacySetting) {
+        wx.getPrivacySetting({
+          success(res1: any) {
+            if (res1.needAuthorization) {
+              console.log('需要用户授权隐私协议')
+            }
+          },
+          fail(err: any) {
+            console.log('获取隐私设置失败:', err)
+          }
+        })
+      }
+      // #endif
+      // 获取系统主题
+      checkSystemTheme();
+
+    },
+    onShow: function (res : OnShowOptions) {
+      this.globalData.onShowOption = res
+
+      // 处理scheme或通用链接直达
+      let url = this.getRedirectUrl(res.appScheme, res.appLink);
+      if (null != url) {
+        uni.navigateTo({
+          url: url
+        })
+      }
+
+      // 自动化测试
+      setLifeCycleNum(state.lifeCycleNum + 100)
+      console.log('App Show')
+
+      // #ifdef APP-ANDROID || APP-IOS || WEB || MP-WEIXIN || APP-HARMONY
+      // 统计上报 - 应用显示（已禁用）
+      // uni.report({
+      // 	name: 'uni-app-show',
+      // 	success(res_data) {
+      // 		console.log(res_data);
+      // 	}, fail(err) {
+      // 		console.log(err);
+      // 	}
+      // })
+      // #endif
+    },
+    onHide: function () {
+      // 自动化测试
+      setLifeCycleNum(state.lifeCycleNum - 100)
+      console.log('App Hide')
+
+      // #ifdef APP-ANDROID || APP-IOS || WEB || MP-WEIXIN || APP-HARMONY
+      // 统计上报 - 应用进入后台（已禁用）
+      // uni.report({
+      // 	name: 'uni-app-hide',
+      // 	success(res) {
+      // 		console.log(res);
+      // 	}, fail(err) {
+      // 		console.log(err);
+      // 	}
+      // })
+      // #endif
+    },
+    // #ifdef APP-ANDROID || APP-HARMONY
+    onLastPageBackPress: function () {
+      // 自动化测试
+      setLifeCycleNum(state.lifeCycleNum - 1000)
+      console.log('App LastPageBackPress')
+      if (firstBackTime == 0) {
+        uni.showToast({
+          title: '再按一次退出应用',
+          position: 'bottom',
+        })
+        firstBackTime = Date.now()
+        setTimeout(() => {
+          firstBackTime = 0
+        }, 2000)
+      } else if (Date.now() - firstBackTime < 2000) {
+        firstBackTime = Date.now()
+        uni.exit()
+      }
+    },
+    onExit() {
+      console.log('App Exit')
+    },
+    // #endif
+    onError(err : any) {
+      console.log('App Error', err)
+      setLifeCycleNum(state.lifeCycleNum + 100)
+      // console.log('App onError', err)
+      // #ifdef APP-ANDROID || APP-IOS || WEB || MP-WEIXIN || APP-HARMONY
+    	// 统计上报 - 应用发生错误（已禁用）
+    	// uni.report({
+    	// 	name: 'uni-app-error',
+    	// 	options: err,
+    	// 	success(res) {
+    	// 		console.log(res);
+    	// 	}, fail(err) {
+    	// 		console.log(err);
+    	// 	}
+    	// })
+      // #endif
+    },
+    methods: {
+      increaseLifeCycleNum() {
+        setLifeCycleNum(state.lifeCycleNum + 100)
+        console.log('App increaseLifeCycleNum')
+      },
+      getRedirectUrl(scheme : string | null, ulink : string | null) : string | null {
+        //解析scheme或universal link启动直达页面：
+        //scheme格式：uniappx://redirect/pages/component/view/view?key=value  //其中redirect后为页面路径
+        //universal link格式：https://uniappx.dcloud.net.cn/ulink/redirect.html?url=%2Fpages%2Fcomponent%2Fview%2Fview%3Fkey%3Dvalue  //通用链接路径需固定，?后面的url参数为直达页面路径，注意url字段值需做url编码（可使用encodeURIComponent方法）
+        let url : string | null = null;
+        if (null != scheme && scheme.length > 0) {
+          const PATHPRE = 'redirect';
+          let parts : string | null = null;
+          let pos = scheme.search('//');
+          if (pos > 0) {
+            parts = scheme.substring(pos + 2);
+          }
+          if (null != parts && parts.startsWith(PATHPRE)) {
+            url = parts.substring(PATHPRE.length);
+          }
+        } else if (null != ulink && ulink.length > 0) {
+          const PATH = 'ulink/redirect.html';
+          let parts = ulink.split('?');
+          if (parts.length > 1 && parts[0].endsWith(PATH) && parts[1].length > 0) {
+            parts[1].split('&').forEach((e) => {
+              let params = e.split('=');
+              if (params.length > 1 && params[0].length > 0 && params[1].length > 0) {
+                if ('url' == params[0]) {
+                  if (null == url) {
+                    url = decodeURIComponent(params[1]);
+                  }
+                }
+              }
+            });
+          }
+        }
+        return url;
+      }
+    }
+  }
+</script>
+
+<style>
+  /*每个页面公共css */
+  @import "./common/uni.css";
+  /* 引入iconfont */
+  @import "./static/iconfont/iconfont.css";
+
+  /* #ifdef WEB */
+  .uni-top-window uni-tabbar .uni-tabbar {
+    background-color: #fff !important;
+  }
+  /* #endif */
+  /* #ifdef MP-WEIXIN */
+  page {
+    background-color: #efeff4;
+  }
+  /* #endif */
+</style>

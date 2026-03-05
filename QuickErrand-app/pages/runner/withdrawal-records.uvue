@@ -1,0 +1,346 @@
+<template>
+  <view class="withdrawal-records-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">←</text>
+      </view>
+      <text class="nav-title">提现记录</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 加载中 -->
+    <view v-if="loading" class="loading-wrapper">
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <!-- 空状态 -->
+    <view v-else-if="records.length === 0" class="empty-wrapper">
+      <text class="empty-icon">💸</text>
+      <text class="empty-text">暂无提现记录</text>
+    </view>
+
+    <!-- 提现记录列表（参照收益明细的表格样式） -->
+    <view v-else class="records-list">
+      <view
+        v-for="(record, index) in records"
+        :key="record.id"
+        class="record-row"
+      >
+        <!-- 序号 -->
+        <text class="col-index">{{ formatIndex(index) }}</text>
+
+        <!-- 主内容：两行，全部居左 -->
+        <view class="col-two-lines">
+          <!-- 第一行：提现方式 + （审核状态 + 提现金额） -->
+          <view class="line-first">
+            <text class="method-text">{{ record.accountTypeText }}</text>
+            <view class="first-right">
+              <text
+                class="status-pill"
+                :class="getStatusClass(record.status)"
+              >
+                {{ record.statusText }}
+              </text>
+              <text class="amount-text">
+                ¥{{ record.actualAmount || record.amount }}
+              </text>
+            </view>
+          </view>
+
+          <!-- 第二行：提现账户 + 申请时间 -->
+          <view class="line-second">
+            <text class="account-text">{{ record.accountInfo }}</text>
+            <text class="time-text">{{ formatTime(record.createTime) }}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getWithdrawalRecords } from '@/common/api/runner.uts'
+import { formatDateTime } from '@/common/utils/common.uts'
+
+export default {
+  data() {
+    return {
+      loading: true,
+      records: [] as any[]
+    }
+  },
+  onLoad() {
+    this.loadRecords()
+  },
+  methods: {
+    formatTime(time: string | null | undefined): string {
+      if (!time) return ''
+      return formatDateTime(time)
+    },
+    goBack() {
+      uni.navigateBack()
+    },
+
+    async loadRecords() {
+      this.loading = true
+      try {
+        this.records = await getWithdrawalRecords()
+      } catch (error) {
+        console.error('获取提现记录失败:', error)
+        uni.showToast({
+          title: '加载失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    getAccountIcon(accountType: number): string {
+      // 与提现页保持一致：2-微信 3-银行卡，其它使用通用图标
+      switch (accountType) {
+        case 2:
+          return '/static/weixinzhifu.png'
+        case 3:
+          return '/static/yinlian.png'
+        default:
+          return '/static/yinlian.png'
+      }
+    },
+
+    getStatusClass(status: number): string {
+      switch (status) {
+        case 1:
+          return 'status-pending'
+        case 2:
+          return 'status-approved'
+        case 3:
+          return 'status-rejected'
+        case 4:
+          return 'status-completed'
+        default:
+          return ''
+      }
+    },
+
+    // 列表序号格式：01、02...
+    formatIndex(index: number): string {
+      const num = index + 1
+      return num < 10 ? `0${num}` : `${num}`
+    }
+  }
+}
+</script>
+
+<style scoped>
+.withdrawal-records-container {
+  min-height: 100vh;
+  background: #f9fafb;
+}
+
+/* 导航栏 */
+.navbar {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.placeholder {
+  width: 64rpx;
+}
+
+/* 加载中 */
+.loading-wrapper {
+  padding: 200rpx 0;
+  display: flex;
+  justify-content: center;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 空状态 */
+.empty-wrapper {
+  padding: 200rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30rpx;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 记录列表 */
+.records-list {
+  padding: 30rpx;
+}
+
+.record-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 26rpx 30rpx;
+  background: #ffffff;
+  border-radius: 0;
+  border-bottom: 1rpx solid #f1f1f5;
+}
+
+.record-row:last-child {
+  border-bottom-width: 0;
+}
+
+.col-index {
+  width: 80rpx;
+  font-size: 26rpx;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.col-two-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6rpx;
+}
+
+.line-first,
+.line-second {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.first-right {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.account-type {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333333;
+}
+
+.method-text {
+  font-size: 28rpx;
+  color: #111827;
+}
+
+.status-pill {
+  display: flex;
+  align-items: center;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+  font-size: 22rpx;
+  font-weight: bold;
+}
+
+.status-pending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-approved {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.status-rejected {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.status-completed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.account-info-text {
+  font-size: 26rpx;
+  color: #4b5563;
+  margin-top: 4rpx;
+}
+
+.account-text {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.time-text {
+  font-size: 24rpx;
+  color: #9ca3af;
+}
+
+.reject-text {
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: #b45309;
+}
+
+.col-amount {
+  min-width: 220rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4rpx;
+}
+
+.amount-withdraw {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.amount-actual {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #2563eb;
+}
+
+.amount-fee {
+  font-size: 24rpx;
+  color: #9ca3af;
+}
+</style>

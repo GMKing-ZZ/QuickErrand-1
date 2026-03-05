@@ -1,0 +1,103 @@
+/**
+ * 常用工具函数
+ */
+
+/**
+ * 格式化日期时间
+ */
+export const formatDateTime = (date : Date | string | number) : string => {
+  let d : Date
+  if (typeof date === 'string' || typeof date === 'number') {
+    d = new Date(date)
+  } else {
+    d = date
+  }
+
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const hour = String(d.getHours()).padStart(2, '0')
+  const minute = String(d.getMinutes()).padStart(2, '0')
+  const second = String(d.getSeconds()).padStart(2, '0')
+
+  return `${year}-${month}-${day} ${hour}:${minute}:${second}`
+}
+
+/**
+ * 格式化日期
+ */
+export const formatDate = (date : Date | string | number) : string => {
+  let d : Date
+  if (typeof date === 'string' || typeof date === 'number') {
+    d = new Date(date)
+  } else {
+    d = date
+  }
+
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+
+  return `${year}-${month}-${day}`
+}
+
+/**
+ * 格式化金额（保留两位小数）
+ */
+export const formatMoney = (amount : number) : string => {
+  return amount.toFixed(2)
+}
+
+/**
+ * 手机号脱敏
+ */
+export const maskPhone = (phone : string) : string => {
+  if (phone.length !== 11) {
+    return phone
+  }
+  return phone.substring(0, 3) + '****' + phone.substring(7)
+}
+
+/**
+ * 验证手机号
+ */
+export const validatePhone = (phone : string) : boolean => {
+  const reg = /^1[3-9]\d{9}$/
+  return reg.test(phone)
+}
+
+/**
+ * 防抖函数
+ */
+export const debounce = (fn : Function, delay : number) : Function => {
+  let timer : number | null = null
+  return function (...args : any[]) {
+    if (timer !== null) {
+      clearTimeout(timer)
+    }
+    timer = setTimeout(() => {
+      fn(...args)
+    }, delay)
+  }
+}
+
+/**
+ * 节流函数
+ */
+export const throttle = (fn : Function, delay : number) : Function => {
+  let lastTime = 0
+  return function (...args : any[]) {
+    const now = Date.now()
+    if (now - lastTime >= delay) {
+      fn(...args)
+      lastTime = now
+    }
+  }
+}
+
+/**
+ * 深拷贝
+ */
+export const deepClone = <T>(obj : T) : T => {
+  return JSON.parse(JSON.stringify(obj)) as T
+}

@@ -1,0 +1,568 @@
+<template>
+  <view class="messages-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="nav-title">消息通知</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 加载中 -->
+    <view v-if="loading" class="loading-wrapper">
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <!-- 空状态：公告和消息都为空 -->
+    <view v-else-if="(announcements.length === 0) && (messages.length === 0)" class="empty-wrapper">
+      <text class="empty-icon">📬</text>
+      <text class="empty-text">暂无消息</text>
+    </view>
+
+    <!-- 公告 + 消息列表 -->
+    <view v-else class="messages-content">
+      <!-- 公告列表 -->
+      <view v-if="announcements.length > 0" class="announcement-block">
+        <view class="announcement-header">
+          <text class="announcement-title-text">平台公告</text>
+          <text class="announcement-subtitle-text">重要通知请及时查看</text>
+        </view>
+        <view class="announcement-list">
+          <view
+            v-for="item in announcements"
+            :key="item.id"
+            class="announcement-item"
+            :class="{ unread: item.isRead === 0 }"
+          >
+            <view class="announcement-main">
+              <view class="announcement-title-row">
+                <view v-if="item.isRead === 0" class="announcement-dot" />
+                <text class="announcement-item-title">{{ item.title }}</text>
+              </view>
+              <rich-text class="announcement-item-content" :nodes="item.content" />
+              <view v-if="item.isRead === 0" class="announcement-action">
+                <button
+                  class="announcement-read-btn"
+                  @click.stop="markAnnouncementRead(item)"
+                >已读</button>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 消息列表 -->
+      <view v-if="messages.length > 0" class="messages-list">
+        <view
+          v-for="message in messages"
+          :key="message.id"
+          class="message-card"
+          :class="{ unread: message.isRead === 0 }"
+          @click="handleMessageClick(message)"
+        >
+          <!-- 未读标记 -->
+          <view v-if="message.isRead === 0" class="unread-badge"></view>
+
+          <!-- 消息头部 -->
+          <view class="message-header">
+            <view class="type-badge" :class="getTypeBadgeClass(message.type)">
+              <text class="type-icon">{{ getTypeIcon(message.type) }}</text>
+              <text class="type-text">{{ message.typeText }}</text>
+            </view>
+            <text class="message-time">{{ formatTime(message.createTime) }}</text>
+          </view>
+
+          <!-- 消息标题 -->
+          <text class="message-title">{{ message.title }}</text>
+
+          <!-- 消息内容 -->
+          <text class="message-content">{{ message.content }}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getMessageList, markMessageAsRead } from '@/common/api/message.uts'
+import { getAnnouncementList } from '@/common/api/announcement.uts'
+import type { AnnouncementInfo } from '@/common/api/announcement.uts'
+import { refreshUnreadCount } from '@/store/message.uts'
+
+export default {
+  data() {
+    return {
+      loading: true,
+      messages: [] as any[],
+      announcements: [] as AnnouncementInfo[]
+    }
+  },
+  onLoad() {
+    this.loadMessages()
+    this.loadAnnouncements()
+  },
+  onShow() {
+    this.loadMessages()
+    this.loadAnnouncements()
+    refreshUnreadCount()
+  },
+  methods: {
+    goBack() {
+      uni.navigateBack()
+    },
+
+    async loadMessages() {
+      this.loading = true
+      try {
+        this.messages = await getMessageList()
+      } catch (error) {
+        console.error('获取消息列表失败:', error)
+        uni.showToast({
+          title: '加载失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async loadAnnouncements() {
+      try {
+        // 不传 position：通知中心展示全部已发布公告；如需只展示个人中心公告，可传 position=2
+        const res = await getAnnouncementList(undefined, 10)
+        const key = 'read_announcement_ids'
+        let readIds : any = []
+        try {
+          const stored = uni.getStorageSync(key)
+          if (Array.isArray(stored)) {
+            readIds = stored
+          }
+        } catch (e) {
+          readIds = []
+        }
+        this.announcements = (res || []).map((item : any) => {
+          const isRead = readIds.includes(item.id) ? 1 : 0
+          return { ...item, isRead }
+        })
+      } catch (error) {
+        console.error('获取公告失败:', error)
+      }
+    },
+
+    markAnnouncementRead(item : any) {
+      if (!item || item.isRead === 1) return
+      item.isRead = 1
+      const key = 'read_announcement_ids'
+      let readIds : any = []
+      try {
+        const stored = uni.getStorageSync(key)
+        if (Array.isArray(stored)) {
+          readIds = stored
+        }
+      } catch (e) {
+        readIds = []
+      }
+      if (!readIds.includes(item.id)) {
+        readIds.push(item.id)
+        uni.setStorageSync(key, readIds)
+      }
+    },
+
+    async handleMessageClick(message: any) {
+      if (message.isRead === 0) {
+        try {
+          await markMessageAsRead(message.id)
+          message.isRead = 1
+          refreshUnreadCount()
+        } catch (error) {
+          console.error('标记消息已读失败:', error)
+        }
+      }
+
+      if (message.relatedId && message.type === 1) {
+        uni.navigateTo({
+          url: `/subpkg/order-detail?orderId=${message.relatedId}`
+        })
+      } else if (message.type === 3 && message.relatedId) {
+        uni.navigateTo({
+          url: `/subpkg/chat-session?orderId=${message.relatedId}`
+        })
+      }
+    },
+
+    getTypeIcon(type: number): string {
+      switch (type) {
+        case 1:
+          return '📦'
+        case 2:
+          return '📢'
+        case 3:
+          return '💬'
+        default:
+          return '📬'
+      }
+    },
+
+    getTypeBadgeClass(type: number): string {
+      switch (type) {
+        case 1:
+          return 'type-order'
+        case 2:
+          return 'type-system'
+        case 3:
+          return 'type-chat'
+        default:
+          return ''
+      }
+    },
+
+    formatTime(timeStr: string): string {
+      const time = new Date(timeStr)
+      const now = new Date()
+      const diff = now.getTime() - time.getTime()
+
+      // 1分钟内
+      if (diff < 60000) {
+        return '刚刚'
+      }
+
+      // 1小时内
+      if (diff < 3600000) {
+        return Math.floor(diff / 60000) + '分钟前'
+      }
+
+      // 今天
+      if (time.toDateString() === now.toDateString()) {
+        return time.getHours() + ':' + String(time.getMinutes()).padStart(2, '0')
+      }
+
+      // 昨天
+      const yesterday = new Date(now)
+      yesterday.setDate(yesterday.getDate() - 1)
+      if (time.toDateString() === yesterday.toDateString()) {
+        return '昨天 ' + time.getHours() + ':' + String(time.getMinutes()).padStart(2, '0')
+      }
+
+      // 其他
+      return (time.getMonth() + 1) + '-' + time.getDate()
+    }
+  }
+}
+</script>
+
+<style scoped>
+.messages-container {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+/* 导航栏 */
+.navbar {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.placeholder {
+  width: 64rpx;
+}
+
+/* 加载中 */
+.loading-wrapper {
+  padding: 200rpx 0;
+  display: flex;
+  justify-content: center;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 空状态 */
+.empty-wrapper {
+  padding: 200rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30rpx;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 内容区域：公告 + 消息 */
+.messages-content {
+  padding: 20rpx 24rpx 30rpx;
+}
+
+/* 公告块 */
+.announcement-block {
+  margin-bottom: 30rpx;
+}
+
+.announcement-header {
+  margin-bottom: 20rpx;
+  padding: 0 4rpx;
+}
+
+.announcement-title-text {
+  display: block;
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #111827;
+  margin-bottom: 8rpx;
+}
+
+.announcement-subtitle-text {
+  display: block;
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.announcement-list {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 24rpx;
+  box-shadow: 0 2rpx 16rpx rgba(0, 0, 0, 0.08);
+  border: 1rpx solid #f0f0f0;
+}
+
+.announcement-item {
+  position: relative;
+  padding: 24rpx;
+  background: #fafafa;
+  border-radius: 16rpx;
+  margin-bottom: 16rpx;
+  border-left: 4rpx solid transparent;
+  transition: all 0.3s ease;
+}
+
+.announcement-item:last-child {
+  margin-bottom: 0;
+}
+
+.announcement-item.unread {
+  background: #f0f9ff;
+  border-left-color: #2563eb;
+  box-shadow: 0 2rpx 8rpx rgba(37, 99, 235, 0.1);
+}
+
+.announcement-item.unread .announcement-item-title {
+  color: #111827;
+  font-weight: 600;
+}
+
+.announcement-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.announcement-title-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.announcement-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #ef4444;
+  margin-right: 12rpx;
+  flex-shrink: 0;
+  box-shadow: 0 0 8rpx rgba(239, 68, 68, 0.4);
+}
+
+.announcement-item-title {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #1f2937;
+  line-height: 1.5;
+}
+
+.announcement-item-content {
+  font-size: 26rpx;
+  color: #4b5563;
+  line-height: 1.8;
+  margin-bottom: 16rpx;
+  max-height: 4.8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+.announcement-action {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid rgba(0, 0, 0, 0.06);
+}
+
+.announcement-read-btn {
+  margin: 0;
+  padding: 12rpx 28rpx;
+  height: auto;
+  line-height: 1.4;
+  font-size: 24rpx;
+  color: #2563eb;
+  background: linear-gradient(135deg, #e0edff 0%, #d6e7ff 100%);
+  border-radius: 20rpx;
+  border: 1rpx solid rgba(37, 99, 235, 0.2);
+  flex-shrink: 0;
+  box-shadow: 0 2rpx 8rpx rgba(37, 99, 235, 0.15);
+  transition: all 0.3s ease;
+}
+
+.announcement-read-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 1rpx 4rpx rgba(37, 99, 235, 0.2);
+}
+
+.announcement-read-btn::after {
+  border: none;
+}
+
+/* 消息列表 */
+.messages-list {
+  margin-top: 4rpx;
+}
+
+.message-card {
+  position: relative;
+  margin-bottom: 20rpx;
+  padding: 30rpx;
+  background: #ffffff;
+  border-radius: 15rpx;
+  overflow: hidden;
+}
+
+.message-card.unread {
+  background: #f0f9ff;
+}
+
+.unread-badge {
+  position: absolute;
+  top: 30rpx;
+  right: 30rpx;
+  width: 16rpx;
+  height: 16rpx;
+  background: #ff4d4f;
+  border-radius: 50%;
+}
+
+/* 消息头部 */
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.type-badge {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 8rpx 16rpx;
+  border-radius: 20rpx;
+}
+
+.type-order {
+  background: #e6f7ff;
+}
+
+.type-system {
+  background: #fff7e6;
+}
+
+.type-chat {
+  background: #f6ffed;
+}
+
+.type-icon {
+  font-size: 28rpx;
+}
+
+.type-text {
+  font-size: 24rpx;
+  font-weight: bold;
+}
+
+.type-order .type-text {
+  color: #1890ff;
+}
+
+.type-system .type-text {
+  color: #fa8c16;
+}
+
+.type-chat .type-text {
+  color: #52c41a;
+}
+
+.message-time {
+  font-size: 24rpx;
+  color: #999999;
+}
+
+/* 消息标题 */
+.message-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333333;
+  margin-bottom: 15rpx;
+}
+
+/* 消息内容 */
+.message-content {
+  display: block;
+  font-size: 26rpx;
+  color: #666666;
+  line-height: 1.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+</style>

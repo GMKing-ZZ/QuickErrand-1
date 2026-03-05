@@ -1,0 +1,773 @@
+<template>
+  <view class="order-list-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="nav-title">我的订单</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 搜索栏 -->
+    <view class="search-section">
+      <view class="search-input-wrapper">
+        <input
+          class="search-input"
+          v-model="searchKeyword"
+          placeholder="搜索订单号、地址、联系人"
+          @confirm="handleSearch"
+        />
+        <view v-if="searchKeyword" class="clear-btn" @click="clearSearch">
+          <text class="clear-icon">✕</text>
+        </view>
+        <view class="search-action-btn" @click="handleSearch">
+          <text class="search-action-text">搜索</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 状态标签 -->
+    <view class="tabs-section">
+      <view class="tabs-wrapper">
+        <view
+          v-for="(tab, index) in tabs"
+          :key="index"
+          class="tab-item"
+          :class="{ active: currentTab === tab.status }"
+          @click="switchTab(tab.status, index)"
+        >
+          <text class="tab-text">{{ tab.label }}</text>
+          <view v-if="currentTab === tab.status" class="tab-indicator"></view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 订单列表 -->
+    <scroll-view class="order-list" scroll-y @scrolltolower="loadMore" :refresher-enabled="true" @refresherrefresh="handleRefresh">
+      <!-- 订单项 -->
+      <view
+        v-for="order in orders"
+        :key="order.id"
+        class="order-item"
+        @click="goToDetail(order.id)"
+      >
+        <view class="order-row">
+          <view class="row-left">
+            <view class="badge" :class="'status-' + order.status">
+              <text class="badge-text">{{ order.statusText }}</text>
+            </view>
+            <view class="main-info">
+              <text class="type">{{ order.orderTypeName || '订单' }}</text>
+              <view class="route">
+                <text class="route-text" :number-of-lines="1">{{ order.pickupAddress }}</text>
+                <text class="route-arrow">→</text>
+                <text class="route-text" :number-of-lines="1">{{ order.deliveryAddress }}</text>
+              </view>
+            </view>
+          </view>
+
+          <view class="row-right">
+            <text class="amount">¥{{ order.amount ? order.amount.toFixed(2) : '0.00' }}</text>
+            <text class="chevron">›</text>
+          </view>
+        </view>
+
+        <view class="order-meta">
+          <text class="meta-item">订单号 {{ order.orderNo }}</text>
+          <text v-if="order.createTime" class="meta-item">{{ formatTime(order.createTime) }}</text>
+        </view>
+
+        <!-- 已完成订单：评价入口 / 已评价 -->
+        <view
+          v-if="order.status === 4"
+          class="order-actions"
+        >
+          <button
+            class="evaluate-btn"
+            :class="{ disabled: order.evaluated }"
+            @click.stop="onEvaluateClick(order)"
+          >
+            <text class="evaluate-btn-text">
+              {{ order.evaluated ? '已评价' : '评价订单' }}
+            </text>
+          </button>
+        </view>
+      </view>
+
+      <!-- 空状态 -->
+      <view v-if="orders.length === 0 && !loading" class="empty-state">
+        <view class="empty-icon-wrapper">
+          <text class="empty-icon">📦</text>
+        </view>
+        <text class="empty-text">暂无订单</text>
+        <text class="empty-hint">快去下单吧~</text>
+      </view>
+
+      <!-- 加载状态 -->
+      <view v-if="loading" class="loading-state">
+        <view class="loading-spinner"></view>
+        <text class="loading-text">加载中...</text>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+
+<script>
+import { getOrderList, searchOrders, cancelOrder, payOrder } from '@/common/api/order.uts'
+import type { OrderInfo } from '@/common/api/order.uts'
+import { formatDateTime } from '@/common/utils/common.uts'
+
+export default {
+  data() {
+    return {
+      currentTab: null as number | null,
+      tabs: [
+        { label: '全部', status: null },
+        { label: '待支付', status: 1 },
+        { label: '待接单', status: 2 },
+        { label: '服务中', status: 3 },
+        { label: '已完成', status: 4 },
+        { label: '已取消', status: 5 }
+      ],
+      orders: [] as OrderInfo[],
+      loading: false,
+      showSearchBar: false,
+      searchKeyword: '',
+      isSearchMode: false
+    }
+  },
+  onLoad(options) {
+    // 如果传入了状态参数，设置当前标签
+    if (options && options.status !== undefined) {
+      this.currentTab = parseInt(options.status)
+    }
+    this.loadOrders()
+  },
+  onShow() {
+    // 每次显示页面时刷新订单列表
+    this.loadOrders()
+  },
+  methods: {
+    formatTime(time: string | null | undefined): string {
+      if (!time) return ''
+      return formatDateTime(time)
+    },
+    goBack() {
+      const pages = getCurrentPages()
+      if (pages && pages.length > 1) {
+        uni.navigateBack()
+      } else {
+        // tabbar 页面没有上一页时，回到首页
+        uni.switchTab({ url: '/pages/home/index' })
+      }
+    },
+    async loadOrders() {
+      this.loading = true
+      try {
+        if (this.isSearchMode && this.searchKeyword) {
+          // 搜索模式
+          const res = await searchOrders(this.searchKeyword)
+          this.orders = Array.isArray(res) ? res : []
+        } else {
+          // 正常列表模式
+          const res = await getOrderList(this.currentTab)
+          this.orders = Array.isArray(res) ? res : []
+        }
+      } catch (error: any) {
+        console.error('获取订单列表失败:', error)
+        // 错误信息已经在request拦截器中显示过了，这里只做日志记录
+        // 如果拦截器没有显示，这里再显示一次
+        const errorMsg = typeof error === 'string' ? error : (error?.message || '加载失败，请重试')
+        // 避免重复显示toast，只在确实需要时显示
+        if (errorMsg && !errorMsg.includes('系统异常')) {
+          uni.showToast({
+            title: errorMsg,
+            icon: 'none',
+            duration: 2000
+          })
+        }
+        // 确保orders是数组
+        this.orders = []
+      } finally {
+        this.loading = false
+      }
+    },
+
+    switchTab(status: number | null, index: number) {
+      this.currentTab = status
+      this.isSearchMode = false
+      this.searchKeyword = ''
+      this.loadOrders()
+    },
+
+    handleSearch() {
+      if (!this.searchKeyword.trim()) {
+        uni.showToast({
+          title: '请输入搜索关键词',
+          icon: 'none'
+        })
+        return
+      }
+      this.isSearchMode = true
+      this.loadOrders()
+    },
+
+    clearSearch() {
+      this.searchKeyword = ''
+      this.isSearchMode = false
+      this.loadOrders()
+    },
+
+    handleRefresh() {
+      this.loadOrders()
+    },
+
+    onEvaluateClick(order: OrderInfo) {
+      if (!order || !order.id) return
+      if (order.evaluated) {
+        // 已评价时不再跳转，仅简单提示
+        uni.showToast({
+          title: '该订单已评价',
+          icon: 'none'
+        })
+        return
+      }
+      uni.navigateTo({
+        url: `/subpkg/order-evaluate?orderId=${order.id}`
+      })
+    },
+
+    goToDetail(orderId: number) {
+      uni.navigateTo({
+        url: `/subpkg/order-detail?orderId=${orderId}`
+      })
+    },
+
+    loadMore() {
+      // TODO: 实现分页加载
+      console.log('加载更多')
+    },
+
+    async handlePay(orderId: number) {
+      try {
+        const payResult = await payOrder(orderId)
+        uni.showToast({
+          title: '支付功能开发中',
+          icon: 'none'
+        })
+      } catch (error) {
+        console.error('支付失败:', error)
+        uni.showToast({
+          title: '支付失败',
+          icon: 'none'
+        })
+      }
+    },
+
+    handleCancel(orderId: number) {
+      uni.showModal({
+        title: '提示',
+        content: '确定要取消订单吗？',
+        success: async (res) => {
+          if (res.confirm) {
+            try {
+              await cancelOrder(orderId, '用户取消')
+              uni.showToast({
+                title: '订单已取消',
+                icon: 'success'
+              })
+              setTimeout(() => {
+                this.loadOrders()
+              }, 1500)
+            } catch (error) {
+              console.error('取消订单失败:', error)
+              uni.showToast({
+                title: '取消失败',
+                icon: 'none'
+              })
+            }
+          }
+        }
+      })
+    }
+  }
+}
+</script>
+
+<style scoped>
+.order-list-container {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f0f9ff 0%, #f9fafb 100%);
+}
+
+/* 导航栏 */
+.navbar {
+  position: relative;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  box-shadow: 0 4rpx 20rpx rgba(37, 99, 235, 0.2);
+  padding-top: env(safe-area-inset-top);
+  height: auto;
+}
+
+.back-btn {
+  position: absolute;
+  left: 30rpx;
+  top: calc(env(safe-area-inset-top) + 20rpx);
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(10rpx);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.back-btn:active {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(0.95);
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.navbar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top) + 38rpx);
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 1rpx;
+  z-index: 1;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
+}
+
+.placeholder {
+  width: 64rpx;
+  height: 64rpx;
+  position: absolute;
+  right: 30rpx;
+  top: calc(env(safe-area-inset-top) + 20rpx);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 搜索栏 */
+.search-section {
+  padding: 24rpx 30rpx;
+  background: #ffffff;
+  border-bottom: 1rpx solid #e5e7eb;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.search-input-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background: #f9fafb;
+  border-radius: 50rpx;
+  padding: 0 20rpx;
+  border: 2rpx solid #e5e7eb;
+  transition: all 0.3s;
+  gap: 12rpx;
+}
+
+.search-input-wrapper:focus-within {
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 4rpx rgba(37, 99, 235, 0.1);
+}
+
+.search-input {
+  flex: 1;
+  height: 80rpx;
+  font-size: 28rpx;
+  color: #1f2937;
+}
+
+.clear-btn {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12rpx;
+  background: #e5e7eb;
+  border-radius: 50%;
+}
+
+.clear-icon {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.search-action-btn {
+  padding: 18rpx 36rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 50rpx;
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.search-action-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 2rpx 8rpx rgba(37, 99, 235, 0.3);
+}
+
+.search-action-text {
+  font-size: 28rpx;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* 状态标签 */
+.tabs-section {
+  background: #ffffff;
+  border-bottom: 1rpx solid #e5e7eb;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tabs-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 10rpx;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 28rpx 0;
+  position: relative;
+  transition: all 0.3s;
+}
+
+.tab-item.active .tab-text {
+  color: #2563eb;
+  font-weight: 700;
+  transform: scale(1.05);
+}
+
+.tab-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 48rpx;
+  height: 6rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 3rpx;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+  to {
+    width: 48rpx;
+    opacity: 1;
+  }
+}
+
+.tab-text {
+  font-size: 30rpx;
+  color: #6b7280;
+  transition: all 0.3s;
+  position: relative;
+  z-index: 1;
+}
+
+/* 订单列表 */
+.order-list {
+  padding: 24rpx 30rpx;
+  padding-bottom: calc(env(safe-area-inset-bottom) + 24rpx);
+}
+
+.order-item {
+  background: #ffffff;
+  border-radius: 24rpx;
+  margin-bottom: 24rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.08);
+  border: 1rpx solid rgba(37, 99, 235, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 28rpx 26rpx;
+}
+
+.order-item:active {
+  transform: translateY(-4rpx) scale(0.98);
+  box-shadow: 0 8rpx 32rpx rgba(37, 99, 235, 0.15);
+}
+
+/* 横向简略卡片 */
+.order-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.row-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 18rpx;
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid transparent;
+}
+
+.badge-text {
+  font-size: 24rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.main-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.type {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.route {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10rpx;
+  color: #475569;
+}
+
+.route-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 26rpx;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-arrow {
+  flex-shrink: 0;
+  font-size: 26rpx;
+  color: #94a3b8;
+}
+
+.row-right {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.amount {
+  font-size: 34rpx;
+  font-weight: 800;
+  color: #f97316;
+  white-space: nowrap;
+}
+
+.chevron {
+  font-size: 44rpx;
+  color: #cbd5e1;
+  line-height: 1;
+}
+
+.order-meta {
+  margin-top: 16rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f1f5f9;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.meta-item {
+  font-size: 24rpx;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 订单操作区域（评价等） */
+.order-actions {
+  margin-top: 12rpx;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.evaluate-btn {
+  min-width: 140rpx;
+  height: 60rpx;
+  padding: 0 24rpx;
+  border-radius: 999rpx;
+  border-width: 1rpx;
+  border-style: solid;
+  border-color: #2563eb;
+  background-color: #eff6ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.evaluate-btn-text {
+  font-size: 24rpx;
+  color: #2563eb;
+}
+
+.evaluate-btn.disabled {
+  border-color: #d1d5db;
+  background-color: #f3f4f6;
+}
+
+.evaluate-btn.disabled .evaluate-btn-text {
+  color: #9ca3af;
+}
+
+/* 订单状态样式 - 对应数据库状态值：1待支付2待接单3服务中4已完成5已取消 */
+.status-1 {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.1) 100%);
+  border: 1rpx solid rgba(239, 68, 68, 0.2);
+}
+
+.status-2 {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%);
+  border: 1rpx solid rgba(245, 158, 11, 0.2);
+}
+
+.status-3 {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.15) 0%, rgba(29, 78, 216, 0.1) 100%);
+  border: 1rpx solid rgba(37, 99, 235, 0.2);
+}
+
+.status-4 {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
+  border: 1rpx solid rgba(16, 185, 129, 0.2);
+}
+
+.status-5 {
+  background: linear-gradient(135deg, rgba(107, 114, 128, 0.15) 0%, rgba(75, 85, 99, 0.1) 100%);
+  border: 1rpx solid rgba(107, 114, 128, 0.2);
+}
+
+/* 让 badge 文字颜色跟随状态 */
+.status-1 .badge-text { color: #dc2626; }
+.status-2 .badge-text { color: #d97706; }
+.status-3 .badge-text { color: #2563eb; }
+.status-4 .badge-text { color: #059669; }
+.status-5 .badge-text { color: #6b7280; }
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 200rpx 0;
+}
+
+.empty-icon-wrapper {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 40rpx;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+}
+
+.empty-text {
+  font-size: 32rpx;
+  color: #64748b;
+  font-weight: 600;
+  margin-bottom: 16rpx;
+}
+
+.empty-hint {
+  font-size: 26rpx;
+  color: #94a3b8;
+}
+
+/* 加载状态 */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80rpx 0;
+  gap: 24rpx;
+}
+
+.loading-spinner {
+  width: 60rpx;
+  height: 60rpx;
+  border: 4rpx solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #94a3b8;
+}
+</style>

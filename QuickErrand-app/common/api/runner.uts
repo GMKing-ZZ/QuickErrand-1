@@ -1,0 +1,241 @@
+/**
+ * 跑腿员认证相关API
+ */
+import { post, get, put } from '../utils/request.uts'
+
+/**
+ * 跑腿员认证信息
+ */
+export type RunnerAuthInfo = {
+  id : number
+  userId : number
+  realName : string
+  idCard : string
+  idCardFront : string
+  idCardBack : string
+  certStatus : number
+  certStatusText : string
+  certTime ?: string
+  rejectReason ?: string
+  creditLevel : number
+  totalOrders : number
+  goodRate : number
+  serviceTime ?: string
+  serviceRange : number
+  createTime : string
+}
+
+/**
+ * 申请跑腿员认证参数
+ */
+export type ApplyRunnerAuthParams = {
+  realName : string
+  idCard : string
+  idCardFront : string
+  idCardBack : string
+}
+
+/**
+ * 更新跑腿员服务设置参数
+ */
+export type UpdateRunnerServiceParams = {
+  serviceTime : string
+  serviceRange : number
+}
+
+/**
+ * 申请跑腿员认证
+ */
+export const applyRunnerAuth = (data : ApplyRunnerAuthParams) : Promise<any> => {
+  return post('/runner/auth/apply', data)
+}
+
+/**
+ * 获取跑腿员认证信息
+ */
+export const getRunnerAuthInfo = () : Promise<RunnerAuthInfo> => {
+  return get<RunnerAuthInfo>('/runner/auth/info')
+}
+
+/**
+ * 更新跑腿员服务设置
+ */
+export const updateRunnerServiceSettings = (data : UpdateRunnerServiceParams) : Promise<any> => {
+  return put('/runner/service/settings', data)
+}
+
+/**
+ * 获取待接单列表
+ */
+export const getPendingOrders = () : Promise<any[]> => {
+  return get<any[]>('/runner/order/pending')
+}
+
+/**
+ * 接单
+ */
+export const acceptOrder = (orderId : number) : Promise<any> => {
+  return post(`/runner/order/accept/${orderId}`, {})
+}
+
+/**
+ * 获取进行中订单列表
+ */
+export const getActiveOrders = () : Promise<any[]> => {
+  return get<any[]>('/runner/order/active')
+}
+
+/**
+ * 获取已完成订单列表
+ */
+export const getCompletedOrders = () : Promise<any[]> => {
+  return get<any[]>('/runner/order/completed')
+}
+
+/**
+ * 取件（更新订单状态为配送中）
+ */
+export const pickupOrder = (orderId : number) : Promise<any> => {
+  return post(`/runner/order/pickup/${orderId}`, {})
+}
+
+/**
+ * 完成订单（验证收货码）
+ */
+export const completeOrder = (orderId : number, pickupCode : string) : Promise<any> => {
+  return post(`/runner/order/complete/${orderId}`, { pickupCode })
+}
+
+/**
+ * 收益统计信息
+ */
+export type EarningsStatistics = {
+  totalEarnings : number
+  pendingEarnings : number
+  settledEarnings : number
+  withdrawableAmount : number
+  todayEarnings : number
+  monthEarnings : number
+  orderEarnings : number
+  bonusEarnings : number
+}
+
+/**
+ * 收益明细
+ */
+export type EarningsDetail = {
+  id : number
+  orderId ?: number
+  orderNo ?: string
+  amount : number
+  type : number
+  typeText : string
+  status : number
+  statusText : string
+  remark ?: string
+  createTime : string
+}
+
+/**
+ * 提现记录
+ */
+export type WithdrawalRecord = {
+  id : number
+  amount : number
+  fee : number
+  actualAmount : number
+  accountType : number
+  accountTypeText : string
+  accountInfo : string
+  status : number
+  statusText : string
+  auditTime ?: string
+  transferTime ?: string
+  rejectReason ?: string
+  createTime : string
+}
+
+/**
+ * 提现申请参数
+ */
+export type WithdrawalApplyParams = {
+  amount : number
+  accountType : number
+  accountInfo : string
+}
+
+/**
+ * 获取收益统计
+ */
+export const getEarningsStatistics = () : Promise<EarningsStatistics> => {
+  return get<EarningsStatistics>('/runner/earnings/statistics')
+}
+
+/**
+ * 获取收益明细列表
+ */
+export const getEarningsDetails = () : Promise<EarningsDetail[]> => {
+  return get<EarningsDetail[]>('/runner/earnings/details')
+}
+
+/**
+ * 申请提现
+ */
+export const applyWithdrawal = (data : WithdrawalApplyParams) : Promise<any> => {
+  return post('/runner/earnings/withdrawal/apply', data)
+}
+
+/**
+ * 获取提现记录列表
+ */
+export const getWithdrawalRecords = () : Promise<WithdrawalRecord[]> => {
+  return get<WithdrawalRecord[]>('/runner/earnings/withdrawal/records')
+}
+
+/**
+ * 评价信息
+ */
+export type ReviewInfo = {
+  id : number
+  orderId : number
+  orderNo : string
+  userId : number
+  userNickname : string
+  runnerId : number
+  runnerName : string
+  serviceScore : number
+  attitudeScore : number
+  content : string
+  images : string
+  tags : string
+  createTime : string
+}
+
+/**
+ * 获取骑手的评价列表
+ */
+export const getRunnerReviews = (pageNum: number, pageSize: number) : Promise<{records: ReviewInfo[], total: number}> => {
+  return get<{records: ReviewInfo[], total: number}>(`/runner/order/reviews?pageNum=${pageNum}&pageSize=${pageSize}`)
+}
+
+/**
+ * 跑腿员公开信息（用户端查看）
+ */
+export type RunnerPublicInfo = {
+  userId : number
+  nickname : string
+  avatar ?: string
+  creditLevel : number
+  totalOrders : number
+  goodRate : number
+  serviceTime ?: string
+  serviceRange : number
+  certTime ?: string
+}
+
+/**
+ * 获取跑腿员公开信息
+ */
+export const getRunnerPublicInfo = (runnerUserId: number) : Promise<RunnerPublicInfo> => {
+  return get<RunnerPublicInfo>(`/order/runner/${runnerUserId}`)
+}

@@ -1,0 +1,92 @@
+<template>
+  <view class="left-window-style" :class="isDarkMode ? 'theme-dark' : 'theme-light'">
+    <view class="second-menu">
+      <navigator class="menu-item" url="/pages/home/index" open-type="switchTab">首页</navigator>
+      <navigator class="menu-item" url="/pages/order/list" open-type="switchTab">订单</navigator>
+      <navigator class="menu-item" url="/pages/mine/mine" open-type="switchTab">我的</navigator>
+    </view>
+  </view>
+</template>
+
+<script lang="uts">
+  import { state, setMatchLeftWindow, setLeftWinActive } from '@/store/index.uts'
+  let isPcObserver
+  export default {
+    data() {
+      return {
+        isPC: false
+      }
+    },
+    computed: {
+      hasLeftWin() : boolean {
+        return !state.noMatchLeftWindow
+      },
+      isDarkMode() : boolean {
+        return state.isDarkMode
+      }
+    },
+    mounted() {
+      isPcObserver = uni.createMediaQueryObserver(this)
+      isPcObserver.observe({
+        minWidth: 768
+      }, matched => {
+        this.isPC = matched
+      })
+      // #ifdef H5
+      // leftWindow/topWindow 仅在 H5（PC 分栏）场景使用，MP-WEIXIN 下没有 $route，避免运行时报错
+      this.handlerRoute((this as any).$route)
+      // #endif
+    },
+    unmounted() {
+      isPcObserver.disconnect()
+    },
+    watch: {
+      isPC: {
+        immediate: true,
+        handler(newMatches : boolean) {
+          setMatchLeftWindow(newMatches)
+        }
+      },
+      // #ifdef H5
+      $route(newRoute) {
+        this.handlerRoute(newRoute)
+      }
+      // #endif
+    },
+    methods: {
+      handlerRoute(newRoute) {
+        if (this.isPC) {
+          if (!newRoute.matched.length) {
+            uni.redirectTo({
+              url: '/pages/home/index'
+            })
+          } else {
+            const path = newRoute.path
+            if (path === '/' || path === '') {
+              setLeftWinActive('/pages/home/index')
+              uni.redirectTo({ url: '/pages/home/index' })
+              return
+            }
+            setLeftWinActive(path)
+          }
+        }
+      }
+    }
+  }
+</script>
+
+<style>
+  .left-window-style {
+    min-height: calc(100vh - var(--top-window-height));
+    background-color: var(--background-color,#ffffff);
+  }
+  .second-menu {
+    width: 350px;
+    padding: 16px;
+    background-color: #F8F8F8;
+  }
+  .menu-item {
+    padding: 12px 0;
+    font-size: 14px;
+  }
+</style>

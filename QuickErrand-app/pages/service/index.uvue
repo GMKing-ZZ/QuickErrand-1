@@ -1,0 +1,380 @@
+<template>
+  <view class="service-container">
+    <!-- 顶部标题 -->
+    <view class="header">
+      <text class="header-title">服务类型</text>
+      <text class="header-subtitle">选择您需要的服务</text>
+    </view>
+
+    <!-- 搜索栏 -->
+    <view class="search-section">
+      <view class="search-input-wrapper">
+        <input
+          class="search-input"
+          v-model="searchKeyword"
+          placeholder="搜索服务类型、描述"
+          @confirm="handleSearch"
+          @input="handleSearchInput"
+        />
+        <view v-if="searchKeyword" class="clear-btn" @click="clearSearch">
+          <text class="clear-icon">✕</text>
+        </view>
+        <view class="search-action-btn" @click="handleSearch">
+          <text class="search-action-text">搜索</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 服务类型列表 -->
+    <view class="service-section">
+      <view class="service-grid">
+        <view
+          v-for="(item, index) in filteredOrderTypes"
+          :key="item.id"
+          class="service-item"
+          @click="selectOrderType(item)"
+        >
+          <view class="service-icon-wrapper">
+            <image v-if="item.icon && item.icon.startsWith('/')" :src="item.icon" class="service-icon-image" mode="aspectFit" />
+            <text v-else class="service-icon">{{ item.icon || '📦' }}</text>
+          </view>
+          <text class="service-name">{{ item.typeName }}</text>
+          <text class="service-desc">{{ item.description || '暂无描述' }}</text>
+        </view>
+      </view>
+
+      <!-- 空状态 -->
+      <view v-if="filteredOrderTypes.length === 0 && !loading" class="empty-state">
+        <text class="empty-icon">📦</text>
+        <text class="empty-text">{{ searchKeyword ? '未找到相关服务' : '暂无服务类型' }}</text>
+      </view>
+
+      <!-- 加载状态 -->
+      <view v-if="loading" class="loading-state">
+        <text class="loading-text">加载中...</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getOrderTypes } from '@/common/api/order.uts'
+import type { OrderTypeInfo } from '@/common/api/order.uts'
+
+export default {
+  data() {
+    return {
+      orderTypes: [] as OrderTypeInfo[],
+      filteredOrderTypes: [] as OrderTypeInfo[],
+      loading: false,
+      searchKeyword: '',
+      isSearchMode: false
+    }
+  },
+  onLoad(options) {
+    // 如果从首页跳转过来，获取搜索关键词
+    if (options.keyword) {
+      this.searchKeyword = decodeURIComponent(options.keyword)
+      this.isSearchMode = true
+    }
+    this.loadOrderTypes()
+  },
+  onShow() {
+    // 检查是否有从首页传递的搜索关键词（通过本地存储）
+    const storedKeyword = uni.getStorageSync('searchKeyword')
+    if (storedKeyword) {
+      this.searchKeyword = storedKeyword
+      this.isSearchMode = true
+      // 清除存储，避免下次进入时还显示
+      uni.removeStorageSync('searchKeyword')
+    }
+    this.loadOrderTypes()
+  },
+  methods: {
+    async loadOrderTypes() {
+      this.loading = true
+      try {
+        const res = await getOrderTypes()
+        console.log('获取到的订单类型数据:', res)
+        // 过滤：status为null或1的都显示
+        this.orderTypes = res.filter((item: OrderTypeInfo) => !item.status || item.status === 1)
+        // 排序：处理sort为null的情况
+        this.orderTypes.sort((a: OrderTypeInfo, b: OrderTypeInfo) => {
+          const sortA = a.sort ?? 999
+          const sortB = b.sort ?? 999
+          return sortA - sortB
+        })
+        console.log('处理后的订单类型数据:', this.orderTypes)
+        // 应用搜索过滤
+        this.applySearchFilter()
+      } catch (error) {
+        console.error('获取订单类型失败:', error)
+        uni.showToast({
+          title: '加载失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    applySearchFilter() {
+      if (this.isSearchMode && this.searchKeyword.trim()) {
+        const keyword = this.searchKeyword.trim().toLowerCase()
+        this.filteredOrderTypes = this.orderTypes.filter((item: OrderTypeInfo) => {
+          const typeName = (item.typeName || '').toLowerCase()
+          const description = (item.description || '').toLowerCase()
+          return typeName.includes(keyword) || description.includes(keyword)
+        })
+      } else {
+        this.filteredOrderTypes = this.orderTypes
+      }
+    },
+
+    handleSearch() {
+      if (!this.searchKeyword.trim()) {
+        this.isSearchMode = false
+        this.applySearchFilter()
+        return
+      }
+      this.isSearchMode = true
+      this.applySearchFilter()
+    },
+
+    handleSearchInput(e: any) {
+      this.searchKeyword = e.detail.value
+      // 实时搜索
+      if (this.searchKeyword.trim()) {
+        this.isSearchMode = true
+      } else {
+        this.isSearchMode = false
+      }
+      this.applySearchFilter()
+    },
+
+    clearSearch() {
+      this.searchKeyword = ''
+      this.isSearchMode = false
+      this.applySearchFilter()
+    },
+
+    selectOrderType(item: OrderTypeInfo) {
+      uni.navigateTo({
+        url: `/subpkg/order-create?orderTypeId=${item.id}`
+      })
+    }
+  }
+}
+</script>
+
+<style scoped>
+.service-container {
+  min-height: 100vh;
+  background: #f9fafb;
+  padding-bottom: 30rpx;
+}
+
+/* 顶部标题 */
+.header {
+  padding: 50rpx 30rpx 30rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  box-shadow: 0 4rpx 20rpx rgba(37, 99, 235, 0.15);
+}
+
+/* 搜索栏 */
+.search-section {
+  padding: 24rpx 30rpx;
+  background: #ffffff;
+  border-bottom: 1rpx solid #e5e7eb;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.search-input-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background: #f9fafb;
+  border-radius: 50rpx;
+  padding: 0 20rpx;
+  border: 2rpx solid #e5e7eb;
+  transition: all 0.3s;
+  gap: 12rpx;
+}
+
+.search-input-wrapper:focus-within {
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 4rpx rgba(37, 99, 235, 0.1);
+}
+
+.search-input {
+  flex: 1;
+  height: 80rpx;
+  font-size: 28rpx;
+  color: #1f2937;
+}
+
+.clear-btn {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12rpx;
+  background: #e5e7eb;
+  border-radius: 50%;
+}
+
+.clear-icon {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.search-action-btn {
+  padding: 18rpx 36rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 50rpx;
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.search-action-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 2rpx 8rpx rgba(37, 99, 235, 0.3);
+}
+
+.search-action-text {
+  font-size: 28rpx;
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.header-title {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #ffffff;
+  display: block;
+  margin-bottom: 12rpx;
+  letter-spacing: -0.5rpx;
+}
+
+.header-subtitle {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* 服务类型 */
+.service-section {
+  margin: 30rpx;
+}
+
+.service-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24rpx;
+}
+
+.service-item {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 36rpx 30rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.service-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6rpx;
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.service-item:active {
+  transform: translateY(-4rpx) scale(0.98);
+  box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.15);
+}
+
+.service-item:active::before {
+  opacity: 1;
+}
+
+.service-icon-wrapper {
+  width: 120rpx;
+  height: 120rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20rpx;
+  position: relative;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+  border-radius: 24rpx;
+}
+
+.service-icon {
+  font-size: 80rpx;
+  line-height: 1;
+}
+
+.service-icon-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.service-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 8rpx;
+}
+
+.service-desc {
+  font-size: 24rpx;
+  color: #6b7280;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 0;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+  margin-bottom: 30rpx;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 加载状态 */
+.loading-state {
+  display: flex;
+  justify-content: center;
+  padding: 100rpx 0;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+</style>

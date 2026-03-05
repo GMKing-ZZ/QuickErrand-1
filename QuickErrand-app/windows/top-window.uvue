@@ -1,0 +1,128 @@
+<template>
+  <view class="top-window-header" :class="isDarkMode ? 'theme-dark' : 'theme-light'">
+    <view class="left-header">
+      <navigator class="left-header" open-type="reLaunch" url="/pages/home/index">
+        <image src="/static/logo.png" class="logo" mode="heightFix"></image>
+        <text>跑腿小程序</text>
+      </navigator>
+    </view>
+    <view class="tab-bar-flex">
+      <navigator v-for="(item, idx) in indexPage" :key="item.tabBar" class="tab-item" :class="{ active: current === idx }"
+        open-type="reLaunch" :url="item.tabBar">
+        <text class="tab-text">{{ item.text }}</text>
+      </navigator>
+    </view>
+  </view>
+</template>
+
+<script lang="uts">
+  type IndexPageItem = {
+    tabBar : string.PageURIString;
+    indexPageUrl : string.PageURIString;
+    text : string;
+  }
+  import { state } from '@/store/index.uts'
+  export default {
+    data() {
+      return {
+        current: 0,
+        indexPage: [{
+          tabBar: '/pages/home/index',
+          indexPageUrl: '/pages/home/index',
+          text: '首页'
+        }, {
+          tabBar: '/pages/order/list',
+          indexPageUrl: '/pages/order/list',
+          text: '订单'
+        }, {
+          tabBar: '/pages/mine/mine',
+          indexPageUrl: '/pages/mine/mine',
+          text: '我的'
+        }] as IndexPageItem[]
+      }
+    },
+    computed: {
+      isDarkMode() : boolean {
+        return state.isDarkMode
+      }
+    },
+    watch: {
+      // #ifdef H5
+      $route: {
+        handler(newRoute) {
+          const width = uni.getSystemInfoSync().windowWidth
+          if (width <= 768) {
+            return
+          }
+          const path = newRoute.path
+          if (path === '/' || path === '/pages/home/index') {
+            this.current = 0
+            if (path === '/') {
+              uni.redirectTo({ url: '/pages/home/index' })
+            }
+            return
+          }
+          if (path === '/pages/order/list') {
+            this.current = 1
+            return
+          }
+          if (path === '/pages/mine/mine') {
+            this.current = 2
+            return
+          }
+          const parts = path.split('/')
+          if (parts.length >= 3) {
+            if (parts[2] === 'home') this.current = 0
+            else if (parts[2] === 'order') this.current = 1
+            else if (parts[2] === 'mine') this.current = 2
+          }
+        }
+      }
+      // #endif
+    }
+  }
+</script>
+
+<style>
+  .top-window-header {
+    height: 60px;
+    padding: 0 15px;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    box-sizing: border-box;
+    border-bottom: 1px solid #e1e1e1;
+    color: var(--text-color, #333333);
+    background-color: var(--list-background-color,#ffffff);
+  }
+
+  .left-header {
+    flex-direction: row;
+    align-items: center;
+    flex: 1;
+  }
+
+  .logo {
+    height: 30px;
+    width: 30px;
+    margin-right: 8px;
+  }
+
+  .tab-bar-flex {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .tab-item {
+    padding: 0 16px;
+  }
+
+  .tab-item.active .tab-text {
+    color: #007AFF;
+    font-weight: bold;
+  }
+
+  .tab-text {
+    font-size: 14px;
+  }
+</style>

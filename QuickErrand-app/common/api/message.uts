@@ -1,0 +1,62 @@
+/**
+ * 消息通知相关API
+ */
+import { post, get } from '../utils/request.uts'
+
+/**
+ * 消息通知信息
+ */
+export type MessageInfo = {
+  id : number
+  title : string
+  content : string
+  type : number
+  typeText : string
+  relatedId ?: number
+  isRead : number
+  createTime : string
+}
+
+/**
+ * 未读消息统计
+ */
+export type UnreadCountInfo = {
+  messageUnread : number
+  chatUnread : number
+  totalUnread : number
+}
+
+/**
+ * 获取消息列表
+ */
+export const getMessageList = () : Promise<MessageInfo[]> => {
+  return get<MessageInfo[]>('/message/list')
+}
+
+/**
+ * 获取未读消息数量
+ */
+export const getUnreadCount = () : Promise<number> => {
+  return get<number>('/message/unread-count')
+}
+
+/**
+ * 获取未读消息统计（系统消息+聊天消息）
+ */
+export const getUnreadStats = () : Promise<UnreadCountInfo> => {
+  return get<UnreadCountInfo>('/message/unread-stats')
+}
+
+/**
+ * 标记消息为已读
+ */
+export const markMessageAsRead = (messageId : number) : Promise<any> => {
+  return post(`/message/read/${messageId}`, {})
+}
+
+/**
+ * 标记所有消息为已读
+ */
+export const markAllMessagesAsRead = () : Promise<any> => {
+  return post('/message/read-all', {})
+}

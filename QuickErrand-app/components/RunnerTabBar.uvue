@@ -1,0 +1,169 @@
+<template>
+  <view class="runner-tabbar">
+    <view
+      class="tab-item"
+      :class="{ active: active === 'home' }"
+      @click="switchTab('home')"
+    >
+      <text class="tab-icon">📊</text>
+      <text class="tab-text">首页</text>
+    </view>
+    <view
+      class="tab-item"
+      :class="{ active: active === 'orders' }"
+      @click="switchTab('orders')"
+    >
+      <text class="tab-icon">📦</text>
+      <text class="tab-text">订单</text>
+    </view>
+    <view
+      class="tab-item"
+      :class="{ active: active === 'message' }"
+      @click="switchTab('message')"
+    >
+      <view class="tab-icon-wrapper">
+        <text class="tab-icon">💬</text>
+        <view v-if="hasUnread" class="tab-badge">
+          <text class="tab-badge-text">{{ unreadText }}</text>
+        </view>
+      </view>
+      <text class="tab-text">消息</text>
+    </view>
+    <view
+      class="tab-item"
+      :class="{ active: active === 'profile' }"
+      @click="switchTab('profile')"
+    >
+      <text class="tab-icon">👤</text>
+      <text class="tab-text">我的</text>
+    </view>
+  </view>
+</template>
+
+<script>
+import { messageState, refreshUnreadCount, startUnreadPolling, stopUnreadPolling } from '@/store/message.uts'
+
+export default {
+  name: 'RunnerTabBar',
+  props: {
+    active: {
+      type: String,
+      default: 'home'
+    }
+  },
+  computed: {
+    hasUnread(): boolean {
+      return messageState.totalUnread > 0
+    },
+    unreadText(): string {
+      const total = messageState.totalUnread
+      if (total > 99) return '99+'
+      return String(total)
+    }
+  },
+  created() {
+    refreshUnreadCount()
+    startUnreadPolling()
+  },
+  unmounted() {
+    stopUnreadPolling()
+  },
+  methods: {
+    switchTab(tab: string) {
+      if (tab === this.active) return
+      if (tab === 'home') {
+        uni.redirectTo({
+          url: '/pages/runner/home'
+        })
+      } else if (tab === 'orders') {
+        uni.redirectTo({
+          url: '/pages/runner/pending-orders'
+        })
+      } else if (tab === 'message') {
+        uni.redirectTo({
+          url: '/subpkg/chat-list?fromRunnerTab=1'
+        })
+      } else if (tab === 'profile') {
+        uni.redirectTo({
+          url: '/pages/runner/profile'
+        })
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+.runner-tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(110rpx + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  box-shadow: 0 -4rpx 20rpx rgba(15, 23, 42, 0.08);
+  border-top: 1rpx solid #e5e7eb;
+  z-index: 999;
+  box-sizing: border-box;
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 22rpx;
+}
+
+.tab-icon {
+  font-size: 34rpx;
+  margin-bottom: 4rpx;
+}
+
+.tab-text {
+  font-size: 22rpx;
+}
+
+.tab-item.active {
+  color: #2563eb;
+}
+
+.tab-item.active .tab-icon {
+  transform: translateY(-2rpx);
+}
+
+.tab-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-badge {
+  position: absolute;
+  top: -8rpx;
+  right: -20rpx;
+  min-width: 28rpx;
+  height: 28rpx;
+  padding: 0 8rpx;
+  border-radius: 14rpx;
+  background: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-badge-text {
+  font-size: 20rpx;
+  color: #ffffff;
+  font-weight: 500;
+}
+</style>
+

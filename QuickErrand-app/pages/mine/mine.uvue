@@ -1,0 +1,584 @@
+<template>
+  <view class="mine-container">
+    <!-- 头部背景 -->
+    <view class="header-bg">
+      <view class="wave"></view>
+    </view>
+
+    <!-- 用户信息卡片 -->
+    <view class="user-card">
+      <view class="user-header">
+        <view class="avatar-wrapper" @click="goToEditProfile">
+          <image v-if="userInfo.avatar && !avatarError" class="avatar" :src="userInfo.avatar" mode="aspectFill" @error="handleAvatarError"></image>
+          <view v-else class="avatar-placeholder">
+            <text class="avatar-text">{{ (userInfo.nickname || userInfo.name || '用').charAt(0) }}</text>
+          </view>
+        </view>
+        <view class="user-info">
+          <text class="nickname">{{ userInfo.nickname || userInfo.name || '未设置昵称' }}</text>
+          <text class="phone">{{ formatPhone(userInfo.phone) }}</text>
+          <view class="role-row">
+            <text class="role-tag">{{ getUserTypeText() }}</text>
+            <text v-if="userInfo.userType === 2" class="cert-tag">{{ getRunnerCertText() }}</text>
+          </view>
+        </view>
+      </view>
+      <view class="edit-btn-wrapper">
+        <button class="edit-btn" @click="goToEditProfile">编辑资料</button>
+      </view>
+    </view>
+
+    <!-- 功能菜单 -->
+    <view class="menu-section">
+      <view class="menu-group">
+        <view class="menu-item" @click="goToAddressList">
+          <view class="menu-icon-wrapper" style="background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);">
+            <text class="menu-icon iconfont icon-dizhiguanli"></text>
+          </view>
+          <text class="menu-label">地址管理</text>
+          <text class="menu-arrow">›</text>
+        </view>
+
+        <view class="menu-item" @click="goToOrderList">
+          <view class="menu-icon-wrapper" style="background: linear-gradient(135deg, #f97316 0%, #fb923c 100%);">
+            <text class="menu-icon iconfont icon-wode-dingdan"></text>
+          </view>
+          <text class="menu-label">我的订单</text>
+          <text class="menu-arrow">›</text>
+        </view>
+
+        <view class="menu-item" @click="goToMyReviews">
+          <view class="menu-icon-wrapper" style="background: linear-gradient(135deg, #fbbf24 0%, #fcd34d 100%);">
+            <text class="menu-icon iconfont icon-xiaoxi"></text>
+          </view>
+          <text class="menu-label">我的评价</text>
+          <text class="menu-arrow">›</text>
+        </view>
+
+        <view class="menu-item" @click="goToMessageList">
+          <view class="menu-icon-wrapper" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
+            <text class="menu-icon iconfont icon-tongzhizhongxin"></text>
+          </view>
+          <text class="menu-label">通知中心</text>
+          <view v-if="hasMessageUnread" class="menu-badge">
+            <text class="badge-text">{{ messageUnreadCount > 99 ? '99+' : messageUnreadCount }}</text>
+          </view>
+          <text class="menu-arrow">›</text>
+        </view>
+
+        <view class="menu-item" @click="goToChatList">
+          <view class="menu-icon-wrapper" style="background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);">
+            <text class="menu-icon iconfont icon-xiaoxi"></text>
+          </view>
+          <text class="menu-label">聊天消息</text>
+          <view v-if="hasChatUnread" class="menu-badge">
+            <text class="badge-text">{{ chatUnreadCount > 99 ? '99+' : chatUnreadCount }}</text>
+          </view>
+          <text class="menu-arrow">›</text>
+        </view>
+
+        <view class="menu-item" @click="goToChangePassword">
+          <view class="menu-icon-wrapper" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%);">
+            <text class="menu-icon iconfont icon-xiugaimima"></text>
+          </view>
+          <text class="menu-label">修改密码</text>
+          <text class="menu-arrow">›</text>
+        </view>
+
+        <view class="menu-item" @click="togglePickupCodeEnabled">
+          <view class="menu-icon-wrapper" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);">
+            <text class="menu-icon iconfont icon-xiugaimima"></text>
+          </view>
+          <text class="menu-label">默认开启收货码</text>
+          <switch :checked="pickupCodeEnabled" @change="onPickupCodeChange" color="#2563eb" />
+        </view>
+      </view>
+    </view>
+
+    <!-- 退出登录按钮 -->
+    <view class="logout-section">
+      <button class="logout-btn" @click="handleLogout">
+        <text class="logout-text">退出登录</text>
+      </button>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getUserInfo, updateUserInfo } from '@/common/api/user.uts'
+import { logout } from '@/store/user.uts'
+import { messageState, refreshUnreadCount, startUnreadPolling, stopUnreadPolling } from '@/store/message.uts'
+
+export default {
+  data() {
+    return {
+      userInfo: {},
+      avatarError: false,
+      pickupCodeEnabled: true
+    }
+  },
+  computed: {
+    hasUnread(): boolean {
+      return messageState.totalUnread > 0
+    },
+    hasMessageUnread(): boolean {
+      return messageState.messageUnread > 0
+    },
+    hasChatUnread(): boolean {
+      return messageState.chatUnread > 0
+    },
+    unreadTotalText(): string {
+      const total = messageState.totalUnread
+      if (total > 99) return '99+'
+      return String(total)
+    },
+    messageUnreadCount(): number {
+      return messageState.messageUnread
+    },
+    chatUnreadCount(): number {
+      return messageState.chatUnread
+    }
+  },
+  onShow() {
+    this.loadUserInfo()
+    refreshUnreadCount()
+  },
+  onLoad() {
+    startUnreadPolling()
+  },
+  onUnload() {
+    stopUnreadPolling()
+  },
+  methods: {
+    async loadUserInfo() {
+      try {
+        const res = await getUserInfo()
+        this.userInfo = res
+        this.pickupCodeEnabled = res.pickupCodeEnabled === 1
+      } catch (error) {
+        console.error('获取用户信息失败:', error)
+      }
+    },
+
+    goToEditProfile() {
+      uni.navigateTo({
+        url: '/subpkg/edit-profile'
+      })
+    },
+
+    goToAddressList() {
+      uni.navigateTo({
+        url: '/subpkg/address-list'
+      })
+    },
+
+    goToOrderList() {
+      uni.switchTab({
+        url: '/pages/order/list'
+      })
+    },
+
+    goToMyReviews() {
+      uni.navigateTo({
+        url: '/subpkg/my-reviews'
+      })
+    },
+
+    goToMessageList() {
+      uni.navigateTo({
+        url: '/subpkg/message-list'
+      })
+    },
+
+    goToChatList() {
+      uni.navigateTo({
+        url: '/subpkg/chat-list'
+      })
+    },
+
+    goToChangePassword() {
+      uni.navigateTo({
+        url: '/subpkg/change-password'
+      })
+    },
+
+    togglePickupCodeEnabled() {
+      this.pickupCodeEnabled = !this.pickupCodeEnabled
+      this.updatePickupCodeEnabled()
+    },
+
+    onPickupCodeChange(e: any) {
+      this.pickupCodeEnabled = e.detail.value
+      this.updatePickupCodeEnabled()
+    },
+
+    async updatePickupCodeEnabled() {
+      try {
+        await updateUserInfo({
+          pickupCodeEnabled: this.pickupCodeEnabled
+        })
+        uni.showToast({
+          title: this.pickupCodeEnabled ? '已开启收货码' : '已关闭收货码',
+          icon: 'success'
+        })
+      } catch (error) {
+        console.error('更新收货码设置失败:', error)
+        this.pickupCodeEnabled = !this.pickupCodeEnabled
+        uni.showToast({
+          title: '设置失败，请重试',
+          icon: 'none'
+        })
+      }
+    },
+
+    handleAvatarError(e) {
+      this.avatarError = true
+      console.log('头像加载失败:', e)
+    },
+
+    formatPhone(phone) {
+      if (!phone) return ''
+      // 手机号脱敏：显示前3位和后4位，中间用****代替
+      if (phone.length === 11) {
+        return phone.substring(0, 3) + '****' + phone.substring(7)
+      }
+      // 如果不是11位，也进行脱敏处理
+      if (phone.length > 7) {
+        return phone.substring(0, 3) + '****' + phone.substring(phone.length - 4)
+      }
+      return phone
+    },
+
+    getUserTypeText() {
+      const type = (this.userInfo as any)?.userType
+      if (type === 2) {
+        return '跑腿员'
+      }
+      return '普通用户'
+    },
+
+    getRunnerCertText() {
+      const info: any = this.userInfo
+      const status = info?.runnerStatus
+      switch (status) {
+        case 1:
+          return '认证中'
+        case 2:
+          return '已认证'
+        case 3:
+          return '认证被驳回'
+        default:
+          return '未认证'
+      }
+    },
+
+    handleLogout() {
+      uni.showModal({
+        title: '提示',
+        content: '确定要退出登录吗？',
+        success: (res) => {
+          if (res.confirm) {
+            logout()
+            uni.reLaunch({
+              url: '/subpkg/login'
+            })
+          }
+        }
+      })
+    }
+  }
+}
+</script>
+
+<style scoped>
+.mine-container {
+  min-height: 100vh;
+  background: #f9fafb;
+  padding-bottom: 30rpx;
+  box-sizing: border-box;
+}
+
+/* 头部背景 */
+.header-bg {
+  position: relative;
+  height: 320rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(37, 99, 235, 0.15);
+}
+
+.wave {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 200%;
+  height: 120rpx;
+  background: #f9fafb;
+  border-radius: 50% 50% 0 0;
+  transform: translateX(-25%);
+}
+
+/* 用户信息卡片 */
+.user-card {
+  position: relative;
+  margin: -100rpx 30rpx 30rpx;
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 44rpx 32rpx 32rpx;
+  box-shadow: 0 8rpx 32rpx rgba(37, 99, 235, 0.12);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+}
+
+.user-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 32rpx;
+}
+
+.avatar-wrapper {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 80rpx;
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  border: 4rpx solid #ffffff;
+  box-shadow: 0 4rpx 16rpx rgba(37, 99, 235, 0.15);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24rpx;
+}
+
+.avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 64rpx;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+}
+
+.avatar-text {
+  font-size: 56rpx;
+  font-weight: 700;
+  color: #ffffff;
+  text-align: center;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.nickname {
+  font-size: 38rpx;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 12rpx;
+  letter-spacing: -0.5rpx;
+  text-align: center;
+}
+
+.phone {
+  font-size: 28rpx;
+  color: #6b7280;
+  text-align: center;
+}
+
+.role-row {
+  margin-top: 12rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+}
+
+.role-tag,
+.cert-tag {
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  line-height: 1.4;
+}
+
+.role-tag {
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
+}
+
+.cert-tag {
+  background: rgba(16, 185, 129, 0.08);
+  color: #059669;
+}
+
+.edit-btn-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #f3f4f6;
+}
+
+.edit-btn {
+  width: 200rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  color: #ffffff;
+  border-radius: 36rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+  border: none;
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0;
+  margin: 0;
+}
+
+.edit-btn::after {
+  border: none;
+}
+
+.edit-btn:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+/* 功能菜单 */
+.menu-section {
+  padding: 0 30rpx;
+}
+
+.menu-group {
+  background: #ffffff;
+  border-radius: 24rpx;
+  margin-bottom: 30rpx;
+  overflow: hidden;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+}
+
+.menu-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 32rpx 30rpx;
+  border-bottom: 1rpx solid #f3f4f6;
+  transition: all 0.3s;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.menu-item:active {
+  background: #f9fafb;
+}
+
+.menu-item:last-child {
+  border-bottom: none;
+}
+
+.menu-icon-wrapper {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 24rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.menu-icon {
+  font-size: 44rpx;
+  color: #ffffff;
+}
+
+.menu-label {
+  flex: 1;
+  font-size: 32rpx;
+  color: #1f2937;
+  font-weight: 500;
+  min-width: 0;
+  text-align: left;
+  line-height: 1.5;
+}
+
+.menu-arrow {
+  font-size: 48rpx;
+  color: #9ca3af;
+  flex-shrink: 0;
+  margin-left: 16rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.menu-badge {
+  min-width: 32rpx;
+  height: 32rpx;
+  padding: 0 10rpx;
+  border-radius: 16rpx;
+  background: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 12rpx;
+  flex-shrink: 0;
+}
+
+.badge-text {
+  font-size: 22rpx;
+  color: #ffffff;
+  font-weight: 500;
+}
+
+/* 退出登录 */
+.logout-section {
+  padding: 30rpx 30rpx 60rpx;
+  margin-top: 20rpx;
+}
+
+.logout-btn {
+  width: 100%;
+  height: 100rpx;
+  background: #ffffff;
+  border-radius: 50rpx;
+  border: 1rpx solid #fee2e2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2rpx 8rpx rgba(239, 68, 68, 0.1);
+  transition: all 0.3s;
+}
+
+.logout-btn:active {
+  background: #fef2f2;
+  transform: scale(0.98);
+}
+
+.logout-text {
+  font-size: 32rpx;
+  color: #ef4444;
+  font-weight: 600;
+}
+</style>

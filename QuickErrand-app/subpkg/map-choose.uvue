@@ -1,0 +1,466 @@
+<template>
+  <view class="map-choose-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="nav-title">选择位置</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 地图容器 -->
+    <view class="map-wrapper">
+      <map
+        id="map"
+        :latitude="centerLatitude"
+        :longitude="centerLongitude"
+        :scale="scale"
+        :markers="markers"
+        :show-location="true"
+        @tap="onMapTap"
+        @regionchange="onRegionChange"
+        class="map"
+      ></map>
+      
+      <!-- 中心点标记 -->
+      <view class="center-marker">
+        <view class="marker-icon">📍</view>
+      </view>
+    </view>
+
+    <!-- 底部地址信息 -->
+    <view class="address-info">
+      <view class="address-header">
+        <text class="address-title">📍 当前位置</text>
+      </view>
+      <view class="address-content">
+        <text class="address-text" v-if="selectedAddress">{{ selectedAddress }}</text>
+        <text class="address-text placeholder" v-else>正在定位...</text>
+      </view>
+      <view class="address-actions">
+        <button class="cancel-btn" @click="goBack">取消</button>
+        <button class="confirm-btn" @click="confirmLocation" :disabled="!selectedAddress || loading" :loading="loading">
+          {{ loading ? '确认中...' : '确认选择' }}
+        </button>
+      </view>
+    </view>
+
+    <!-- 加载提示 -->
+    <view class="loading-mask" v-if="loading">
+      <view class="loading-content">
+        <text class="loading-text">正在解析地址...</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { MAP_CONFIG } from '@/common/config/map.uts'
+
+export default {
+  data() {
+    return {
+      centerLatitude: 39.908823,
+      centerLongitude: 116.397470,
+      scale: 16,
+      markers: [] as any[],
+      selectedLatitude: 0,
+      selectedLongitude: 0,
+      selectedAddress: '',
+      loading: false,
+      isRegionChanging: false
+    }
+  },
+  onLoad() {
+    this.initLocation()
+  },
+  methods: {
+    // 初始化定位
+    initLocation() {
+      uni.getLocation({
+        type: 'gcj02',
+        success: (res) => {
+          console.log('获取当前位置成功:', res)
+          this.centerLatitude = res.latitude
+          this.centerLongitude = res.longitude
+          this.selectedLatitude = res.latitude
+          this.selectedLongitude = res.longitude
+          
+          // 添加标记
+          this.updateMarker(res.latitude, res.longitude)
+          
+          // 逆地理编码获取地址
+          this.reverseGeocode(res.latitude, res.longitude)
+        },
+        fail: (err) => {
+          console.error('获取当前位置失败:', err)
+          uni.showToast({
+            title: '获取位置失败，请重试',
+            icon: 'none'
+          })
+          // 使用默认位置（北京）
+          this.updateMarker(this.centerLatitude, this.centerLongitude)
+          this.reverseGeocode(this.centerLatitude, this.centerLongitude)
+        }
+      })
+    },
+
+    // 更新标记
+    updateMarker(latitude: number, longitude: number) {
+      this.markers = [{
+        id: 1,
+        latitude: latitude,
+        longitude: longitude,
+        title: '选择的位置',
+        iconPath: '', // 使用默认标记
+        width: 20,
+        height: 20
+      }]
+    },
+
+    // 地图点击事件
+    onMapTap(e: any) {
+      if (this.isRegionChanging) {
+        return
+      }
+      const { latitude, longitude } = e.detail
+      if (latitude && longitude) {
+        this.centerLatitude = latitude
+        this.centerLongitude = longitude
+        this.selectedLatitude = latitude
+        this.selectedLongitude = longitude
+        this.updateMarker(latitude, longitude)
+        this.reverseGeocode(latitude, longitude)
+      }
+    },
+
+    // 地图区域变化事件
+    onRegionChange(e: any) {
+      if (e.type === 'end' && !this.isRegionChanging) {
+        this.isRegionChanging = true
+        setTimeout(() => {
+          // 获取地图中心点
+          const mapContext = uni.createMapContext('map', this)
+          mapContext.getCenterLocation({
+            success: (res: any) => {
+              console.log('地图中心点:', res)
+              if (res.latitude && res.longitude) {
+                this.selectedLatitude = res.latitude
+                this.selectedLongitude = res.longitude
+                this.updateMarker(res.latitude, res.longitude)
+                this.reverseGeocode(res.latitude, res.longitude)
+              }
+              this.isRegionChanging = false
+            },
+            fail: () => {
+              this.isRegionChanging = false
+            }
+          })
+        }, 300)
+      }
+    },
+
+    // 逆地理编码：根据经纬度获取地址信息
+    reverseGeocode(latitude: number, longitude: number) {
+      this.loading = true
+      this.selectedAddress = ''
+      
+      const key = MAP_CONFIG.amapKey
+      if (!key) {
+        this.loading = false
+        uni.showToast({
+          title: '请配置高德地图Key',
+          icon: 'none',
+          duration: 2000
+        })
+        return
+      }
+      
+      // 高德地图API需要经纬度顺序为：经度,纬度
+      const location = `${longitude},${latitude}`
+      
+      uni.request({
+        url: 'https://restapi.amap.com/v3/geocode/regeo',
+        method: 'GET',
+        data: {
+          location: location,
+          key: key,
+          radius: 1000,
+          extensions: 'base'
+        },
+        success: (res: any) => {
+          console.log('高德地图逆地理编码结果:', res)
+          this.loading = false
+          
+          if (res.data && res.data.status === '1' && res.data.regeocode) {
+            const regeocode = res.data.regeocode
+            const formattedAddress = regeocode.formatted_address || ''
+            const addressComponent = regeocode.addressComponent
+            
+            if (formattedAddress) {
+              this.selectedAddress = formattedAddress
+            } else if (addressComponent) {
+              // 拼接地址
+              const parts: string[] = []
+              if (addressComponent.province) parts.push(addressComponent.province)
+              if (addressComponent.city) parts.push(addressComponent.city)
+              if (addressComponent.district) parts.push(addressComponent.district)
+              if (addressComponent.street) parts.push(addressComponent.street)
+              if (addressComponent.streetNumber) parts.push(addressComponent.streetNumber)
+              this.selectedAddress = parts.join('')
+            } else {
+              this.selectedAddress = '地址解析失败'
+            }
+          } else {
+            this.selectedAddress = res.data?.info || '地址解析失败'
+          }
+        },
+        fail: (err) => {
+          console.error('逆地理编码请求失败:', err)
+          this.loading = false
+          this.selectedAddress = '网络错误，请检查网络'
+        }
+      })
+    },
+
+    // 确认选择位置
+    confirmLocation() {
+      if (!this.selectedAddress || this.loading) {
+        return
+      }
+      
+      // 返回选择的位置信息
+      const pages = getCurrentPages()
+      const prevPage = pages[pages.length - 2]
+      
+      if (prevPage) {
+        // 调用上一页的方法处理选择的位置
+        const locationData = {
+          latitude: this.selectedLatitude,
+          longitude: this.selectedLongitude,
+          address: this.selectedAddress,
+          name: this.selectedAddress.substring(0, 20) // 截取前20个字符作为名称
+        }
+        
+        // 尝试调用上一页的 onLocationSelected 方法
+        if (typeof prevPage.onLocationSelected === 'function') {
+          prevPage.onLocationSelected(locationData)
+        } else if (prevPage.$vm && typeof prevPage.$vm.onLocationSelected === 'function') {
+          prevPage.$vm.onLocationSelected(locationData)
+        } else {
+          // 如果方法不存在，使用事件总线或存储
+          uni.setStorageSync('selectedLocation', locationData)
+        }
+      }
+      
+      uni.navigateBack({
+        success: () => {
+          console.log('返回上一页成功')
+        }
+      })
+    },
+
+    // 返回
+    goBack() {
+      uni.navigateBack()
+    }
+  }
+}
+</script>
+
+<style scoped>
+.map-choose-container {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: #f5f5f5;
+}
+
+/* 导航栏 */
+.navbar {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  background: #ffffff;
+  z-index: 100;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.back-btn:active {
+  background: rgba(0, 0, 0, 0.1);
+  transform: scale(0.95);
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #333333;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333333;
+  letter-spacing: 1rpx;
+}
+
+.placeholder {
+  width: 64rpx;
+  flex-shrink: 0;
+}
+
+/* 地图容器 */
+.map-wrapper {
+  flex: 1;
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+/* 中心点标记 */
+.center-marker {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.marker-icon {
+  font-size: 60rpx;
+  line-height: 1;
+  text-align: center;
+  filter: drop-shadow(0 2rpx 4rpx rgba(0, 0, 0, 0.3));
+}
+
+/* 底部地址信息 */
+.address-info {
+  background: #ffffff;
+  padding: 30rpx;
+  box-shadow: 0 -4rpx 12rpx rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+.address-header {
+  margin-bottom: 20rpx;
+}
+
+.address-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333333;
+}
+
+.address-content {
+  margin-bottom: 30rpx;
+  min-height: 80rpx;
+  padding: 20rpx;
+  background: #f9fafb;
+  border-radius: 12rpx;
+}
+
+.address-text {
+  font-size: 28rpx;
+  color: #333333;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.address-text.placeholder {
+  color: #999999;
+}
+
+.address-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 20rpx;
+}
+
+.cancel-btn,
+.confirm-btn {
+  flex: 1;
+  height: 88rpx;
+  border-radius: 44rpx;
+  border: none;
+  font-size: 32rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cancel-btn {
+  background: #f3f4f6;
+  color: #666666;
+}
+
+.cancel-btn:active {
+  background: #e5e7eb;
+}
+
+.confirm-btn {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  color: #ffffff;
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
+}
+
+.confirm-btn:active {
+  opacity: 0.9;
+  transform: scale(0.98);
+}
+
+.confirm-btn[disabled] {
+  opacity: 0.6;
+}
+
+/* 加载提示 */
+.loading-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.loading-content {
+  background: #ffffff;
+  padding: 40rpx 60rpx;
+  border-radius: 16rpx;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #333333;
+}
+</style>

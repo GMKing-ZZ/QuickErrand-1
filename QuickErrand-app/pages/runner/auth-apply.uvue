@@ -1,0 +1,562 @@
+<template>
+  <view class="auth-apply-container">
+    <!-- 头部背景，样式与用户端编辑资料保持一致 -->
+    <view class="header-bg">
+      <view class="wave"></view>
+    </view>
+
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="nav-title">{{ isReapply ? '重新认证申请' : '跑腿员认证申请' }}</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 提示信息 -->
+    <view class="tips-section">
+      <text class="tips-icon">ℹ️</text>
+      <view class="tips-content">
+        <text class="tips-title">{{ isReapply ? '重新认证说明' : '认证说明' }}</text>
+        <text class="tips-text">1. 请确保提供的信息真实有效</text>
+        <text class="tips-text">2. 身份证照片需清晰可见</text>
+        <text class="tips-text">3. 提交后等待管理员审核，审核通过后即可接单</text>
+        <text class="tips-text" v-if="isReapply">4. 请检查并修改有误的信息后重新提交</text>
+        <text class="tips-text" v-else>4. 未通过认证的跑腿员无法接单</text>
+      </view>
+    </view>
+
+    <!-- 表单区域 -->
+    <view class="form-section">
+      <!-- 真实姓名 -->
+      <view class="form-item">
+        <text class="form-label">真实姓名</text>
+        <input
+          class="form-input"
+          v-model="formData.realName"
+          placeholder="请输入真实姓名"
+          maxlength="50"
+        />
+      </view>
+
+      <!-- 身份证号 -->
+      <view class="form-item">
+        <text class="form-label">身份证号</text>
+        <input
+          class="form-input"
+          v-model="formData.idCard"
+          placeholder="请输入身份证号"
+          maxlength="18"
+        />
+      </view>
+
+      <!-- 身份证正面照 -->
+      <view class="form-item">
+        <text class="form-label">身份证正面照</text>
+        <view class="upload-wrapper">
+          <view
+            v-if="!formData.idCardFront"
+            class="upload-box"
+            @click="uploadIdCardFront"
+          >
+            <text class="upload-icon">+</text>
+            <text class="upload-text">上传身份证正面</text>
+          </view>
+          <view v-else class="image-preview" @click="uploadIdCardFront">
+            <image class="preview-image" :src="formData.idCardFront" mode="aspectFill" />
+            <view class="delete-btn" @click.stop="deleteIdCardFront">
+              <text class="delete-icon">×</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 身份证反面照 -->
+      <view class="form-item">
+        <text class="form-label">身份证反面照</text>
+        <view class="upload-wrapper">
+          <view
+            v-if="!formData.idCardBack"
+            class="upload-box"
+            @click="uploadIdCardBack"
+          >
+            <text class="upload-icon">+</text>
+            <text class="upload-text">上传身份证反面</text>
+          </view>
+          <view v-else class="image-preview" @click="uploadIdCardBack">
+            <image class="preview-image" :src="formData.idCardBack" mode="aspectFill" />
+            <view class="delete-btn" @click.stop="deleteIdCardBack">
+              <text class="delete-icon">×</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 提交按钮 -->
+    <view class="submit-section">
+      <button class="submit-btn" @click="handleSubmit" :loading="submitting">
+        <text class="btn-text">{{ isReapply ? '重新提交申请' : '提交申请' }}</text>
+      </button>
+    </view>
+  </view>
+</template>
+
+<script>
+import { applyRunnerAuth, getRunnerAuthInfo } from '@/common/api/runner.uts'
+import { userState } from '@/store/user.uts'
+import { upload } from '@/common/utils/request.uts'
+
+export default {
+  data() {
+    return {
+      formData: {
+        realName: '',
+        idCard: '',
+        idCardFront: '',
+        idCardBack: ''
+      },
+      submitting: false,
+      isReapply: false
+    }
+  },
+  onLoad(options: any) {
+    if (options.reapply === 'true') {
+      this.isReapply = true
+      this.loadExistingAuthInfo()
+    }
+  },
+  methods: {
+    async loadExistingAuthInfo() {
+      try {
+        uni.showLoading({ title: '加载中...' })
+        const authInfo = await getRunnerAuthInfo()
+        if (authInfo) {
+          this.formData.realName = authInfo.realName || ''
+          this.formData.idCardFront = authInfo.idCardFront || ''
+          this.formData.idCardBack = authInfo.idCardBack || ''
+          if (authInfo.idCard && !authInfo.idCard.includes('*')) {
+            this.formData.idCard = authInfo.idCard
+          }
+        }
+        uni.hideLoading()
+      } catch (error) {
+        uni.hideLoading()
+        console.error('加载已有认证信息失败:', error)
+      }
+    },
+    goBack() {
+      uni.navigateBack()
+    },
+
+    // 进入页面前校验身份
+    checkRunnerAccess() {
+      const info: any = userState.userInfo
+      if (!info || info.userType !== 2) {
+        uni.showModal({
+          title: '提示',
+          content: '当前账号不是跑腿员，无法申请跑腿员认证',
+          showCancel: false,
+          success: () => {
+            uni.navigateBack()
+          }
+        })
+        return false
+      }
+      return true
+    },
+
+    // 上传身份证正面照
+    uploadIdCardFront() {
+      uni.chooseImage({
+        count: 1,
+        sizeType: ['compressed'],
+        sourceType: ['album', 'camera'],
+        success: async (res) => {
+          const tempFilePath = res.tempFilePaths[0]
+
+          uni.showLoading({
+            title: '上传中...'
+          })
+
+          try {
+            const info: any = userState.userInfo
+            const username = info?.username || 'user'
+            const uploadRes = await upload('/file/upload/runner-auth', tempFilePath, { username })
+            this.formData.idCardFront = uploadRes
+            uni.hideLoading()
+            uni.showToast({
+              title: '上传成功',
+              icon: 'success'
+            })
+          } catch (error) {
+            uni.hideLoading()
+            console.error('上传身份证正面照失败:', error)
+          }
+        }
+      })
+    },
+
+    // 删除身份证正面照
+    deleteIdCardFront() {
+      this.formData.idCardFront = ''
+    },
+
+    // 上传身份证反面照
+    uploadIdCardBack() {
+      uni.chooseImage({
+        count: 1,
+        sizeType: ['compressed'],
+        sourceType: ['album', 'camera'],
+        success: async (res) => {
+          const tempFilePath = res.tempFilePaths[0]
+
+          uni.showLoading({
+            title: '上传中...'
+          })
+
+          try {
+            const info: any = userState.userInfo
+            const username = info?.username || 'user'
+            const uploadRes = await upload('/file/upload/runner-auth', tempFilePath, { username })
+            this.formData.idCardBack = uploadRes
+            uni.hideLoading()
+            uni.showToast({
+              title: '上传成功',
+              icon: 'success'
+            })
+          } catch (error) {
+            uni.hideLoading()
+            console.error('上传身份证反面照失败:', error)
+          }
+        }
+      })
+    },
+
+    // 删除身份证反面照
+    deleteIdCardBack() {
+      this.formData.idCardBack = ''
+    },
+
+    // 验证身份证号
+    validateIdCard(idCard: string): boolean {
+      const reg = /^[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]$/
+      return reg.test(idCard)
+    },
+
+    // 提交申请
+    async handleSubmit() {
+      if (!this.checkRunnerAccess()) {
+        return
+      }
+      // 验证
+      if (!this.formData.realName.trim()) {
+        uni.showToast({
+          title: '请输入真实姓名',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (!this.formData.idCard.trim()) {
+        uni.showToast({
+          title: '请输入身份证号',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (!this.validateIdCard(this.formData.idCard)) {
+        uni.showToast({
+          title: '身份证号格式不正确',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (!this.formData.idCardFront) {
+        uni.showToast({
+          title: '请上传身份证正面照',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (!this.formData.idCardBack) {
+        uni.showToast({
+          title: '请上传身份证反面照',
+          icon: 'none'
+        })
+        return
+      }
+
+      this.submitting = true
+      try {
+        await applyRunnerAuth(this.formData)
+        uni.showToast({
+          title: '提交成功，请等待审核',
+          icon: 'success'
+        })
+        setTimeout(() => {
+          uni.navigateBack()
+        }, 1500)
+      } catch (error) {
+        console.error('提交认证申请失败:', error)
+        uni.showToast({
+          title: '提交失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.submitting = false
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+.auth-apply-container {
+  min-height: 100vh;
+  background: #f9fafb;
+  padding-bottom: 150rpx;
+  box-sizing: border-box;
+}
+
+/* 头部背景，与编辑资料页面保持统一视觉 */
+.header-bg {
+  position: relative;
+  height: 280rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(37, 99, 235, 0.15);
+}
+
+.wave {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 200%;
+  height: 100rpx;
+  background: #f9fafb;
+  border-radius: 50% 50% 0 0;
+  transform: translateX(-25%);
+}
+
+/* 导航栏 */
+.navbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  z-index: 10;
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10rpx);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  flex-shrink: 0;
+  z-index: 11;
+}
+
+.back-btn:active {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(0.95);
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 1rpx;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.placeholder {
+  width: 64rpx;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* 提示信息 */
+.tips-section {
+  margin: -40rpx 30rpx 30rpx;
+  padding: 30rpx;
+  background: #fff3cd;
+  border-radius: 20rpx;
+  display: flex;
+  gap: 20rpx;
+}
+
+.tips-icon {
+  font-size: 40rpx;
+}
+
+.tips-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.tips-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #856404;
+  margin-bottom: 10rpx;
+}
+
+.tips-text {
+  font-size: 26rpx;
+  color: #856404;
+  line-height: 1.6;
+}
+
+/* 表单区域 */
+.form-section {
+  margin: 30rpx;
+  padding: 30rpx;
+  background: #ffffff;
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.form-item {
+  margin-bottom: 40rpx;
+}
+
+.form-item:last-child {
+  margin-bottom: 0;
+}
+
+.form-label {
+  display: block;
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333333;
+  margin-bottom: 20rpx;
+}
+
+.form-input {
+  width: 100%;
+  height: 90rpx;
+  padding: 0 30rpx;
+  font-size: 28rpx;
+  color: #333333;
+  background: #f5f5f5;
+  border-radius: 15rpx;
+}
+
+/* 上传区域 */
+.upload-wrapper {
+  display: flex;
+  gap: 20rpx;
+}
+
+.upload-box {
+  width: 200rpx;
+  height: 200rpx;
+  background: #f5f5f5;
+  border: 2rpx dashed #cccccc;
+  border-radius: 15rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+}
+
+.upload-icon {
+  font-size: 60rpx;
+  color: #999999;
+}
+
+.upload-text {
+  font-size: 24rpx;
+  color: #999999;
+}
+
+.image-preview {
+  position: relative;
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 15rpx;
+  overflow: hidden;
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+}
+
+.delete-btn {
+  position: absolute;
+  top: 10rpx;
+  right: 10rpx;
+  width: 50rpx;
+  height: 50rpx;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-icon {
+  font-size: 40rpx;
+  color: #ffffff;
+  line-height: 1;
+}
+
+/* 提交按钮 */
+.submit-section {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 30rpx;
+  background: #ffffff;
+  box-shadow: 0 -4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.submit-btn {
+  width: 100%;
+  height: 100rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 50rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.3);
+}
+
+.btn-text {
+  font-size: 32rpx;
+  color: #ffffff;
+  font-weight: bold;
+}
+</style>
+

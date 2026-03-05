@@ -1,0 +1,1120 @@
+<template>
+  <view class="pending-orders-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="navbar-content">
+        <view class="back-btn" @click="goBack">
+          <text class="back-icon">‹</text>
+        </view>
+        <text class="nav-title">{{ statusOptions[statusIndex].navTitle }}</text>
+        <view class="refresh-btn" @click="loadOrders">
+          <text class="refresh-icon">↻</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 状态 + 排序 -->
+    <view class="status-sort-bar">
+      <view class="status-tabs">
+        <view
+          v-for="(item, idx) in statusOptions"
+          :key="item.key"
+          class="status-tab"
+          :class="{ active: statusIndex === idx }"
+          @click="onStatusTabClick(idx)"
+        >
+          <text class="status-tab-title">{{ item.label }}</text>
+        </view>
+      </view>
+
+      <!-- 统一使用下拉选择排序方式 -->
+      <picker
+        class="sort-picker"
+        mode="selector"
+        :range="sortOptions"
+        range-key="label"
+        :value="sortIndex"
+        @change="onSortChange"
+      >
+        <view class="sort-box">
+          <text class="sort-text">
+            {{ sortOptions[sortIndex].label }}
+          </text>
+          <text class="sort-icon">▾</text>
+        </view>
+      </picker>
+    </view>
+
+    <!-- 已完成订单的日期范围筛选 -->
+    <view v-if="currentStatusKey() === 'completed'" class="date-filter-bar">
+      <picker mode="date" :value="startDate" @change="onStartDateChange">
+        <view class="date-item">
+          <text class="date-label">开始日期</text>
+          <text class="date-value">{{ startDate || '不限' }}</text>
+        </view>
+      </picker>
+      <text class="date-separator">至</text>
+      <picker mode="date" :value="endDate" @change="onEndDateChange">
+        <view class="date-item">
+          <text class="date-label">结束日期</text>
+          <text class="date-value">{{ endDate || '不限' }}</text>
+        </view>
+      </picker>
+      <view class="date-reset" @click="resetDateRange">
+        <text class="date-reset-text">清空</text>
+      </view>
+    </view>
+
+    <!-- 订单列表 -->
+    <scroll-view class="order-list" scroll-y @scrolltolower="loadMore" :refresher-enabled="true" @refresherrefresh="handleRefresh">
+      <!-- 订单项 -->
+      <view
+        v-for="order in orders"
+        :key="order.id"
+        class="order-item"
+        @click="viewOrderDetail(order)"
+      >
+        <view class="order-row">
+          <view class="row-left">
+            <view class="badge" :class="statusBadgeClass()">
+              <text class="badge-text">{{ statusText(order) }}</text>
+            </view>
+            <view class="main-info">
+              <text class="type">{{ order.orderTypeName || '订单' }}</text>
+              <view class="route">
+                <text class="route-text" :number-of-lines="1">{{ order.pickupAddress }}</text>
+                <text class="route-arrow">→</text>
+                <text class="route-text" :number-of-lines="1">{{ order.deliveryAddress }}</text>
+              </view>
+            </view>
+          </view>
+
+          <view class="row-right">
+            <text class="amount">¥{{ order.runnerFee ? order.runnerFee.toFixed(2) : '0.00' }}</text>
+            <text class="chevron">›</text>
+          </view>
+        </view>
+
+        <view class="order-meta">
+          <text class="meta-item">订单号 {{ order.orderNo }}</text>
+          <text v-if="order.distance !== undefined && order.distance !== null" class="meta-item">{{ formatDistance(order.distance) }}</text>
+          <text v-if="order.createTime" class="meta-item">{{ formatTime(order.createTime) }}</text>
+        </view>
+
+        <!-- 备注信息 -->
+        <view v-if="order.remark" class="remark-row">
+          <text class="remark-label">备注：</text>
+          <text class="remark-text">{{ order.remark }}</text>
+        </view>
+
+        <!-- 操作按钮（可接单列表） -->
+        <view v-if="currentStatusKey() === 'pending'" class="action-section">
+          <button class="accept-btn" @click.stop="handleAcceptOrder(order)">
+            <text class="btn-text">立即接单</text>
+          </button>
+        </view>
+
+        <!-- 操作按钮（服务中列表：确认收货 + 联系用户） -->
+        <view v-if="currentStatusKey() === 'active'" class="action-section">
+          <button class="contact-user-btn" @click.stop="handleContactUser(order)">
+            <text class="btn-text">联系用户</text>
+          </button>
+          <button class="confirm-receive-btn" @click.stop="goConfirmReceive(order)">
+            <text class="btn-text">确认收货</text>
+          </button>
+        </view>
+      </view>
+
+      <!-- 空状态 -->
+      <view v-if="orders.length === 0 && !loading" class="empty-state">
+        <view class="empty-icon-wrapper">
+          <text class="empty-icon">📦</text>
+        </view>
+        <text class="empty-text">{{ emptyText() }}</text>
+        <text class="empty-hint">{{ emptyHint() }}</text>
+      </view>
+
+      <!-- 加载状态 -->
+      <view v-if="loading" class="loading-state">
+        <view class="loading-spinner"></view>
+        <text class="loading-text">加载中...</text>
+      </view>
+    </scroll-view>
+
+    <!-- 跑腿员底部导航 -->
+    <RunnerTabBar active="orders" />
+  </view>
+</template>
+
+<script>
+import { getPendingOrders, getActiveOrders, getCompletedOrders, acceptOrder, getRunnerAuthInfo } from '@/common/api/runner.uts'
+import { userState } from '@/store/user.uts'
+import RunnerTabBar from '@/components/RunnerTabBar.uvue'
+
+export default {
+  components: {
+    RunnerTabBar
+  },
+  data() {
+    return {
+      loading: true,
+      orders: [] as any[],
+      wsConnection: null as any,
+      authInfo: null as any,
+      statusOptions: [
+        {
+          key: 'pending',
+          label: '可接单',
+          navTitle: '可接单订单',
+          emptyText: '暂无待接单订单',
+          emptyHint: '等待新订单发布~'
+        },
+        {
+          key: 'active',
+          label: '服务中',
+          navTitle: '服务中订单',
+          emptyText: '暂无服务中订单',
+          emptyHint: '当前没有进行中的订单'
+        },
+        {
+          key: 'completed',
+          label: '已完成',
+          navTitle: '已完成订单',
+          emptyText: '暂无已完成订单',
+          emptyHint: '完成的订单会出现在这里'
+        }
+      ] as any[],
+      statusIndex: 0,
+      // 排序配置
+      sortOrder: 'desc' as string, // asc / desc
+      sortBy: 'time' as string, // time / fee / distance
+      sortOptions: [
+        { key: 'time_desc', label: '时间从近到远', sortBy: 'time', order: 'desc' },
+        { key: 'time_asc', label: '时间从远到近', sortBy: 'time', order: 'asc' },
+        { key: 'fee_desc', label: '收益从高到低', sortBy: 'fee', order: 'desc' },
+        { key: 'fee_asc', label: '收益从低到高', sortBy: 'fee', order: 'asc' },
+        { key: 'distance_desc', label: '距离从远到近', sortBy: 'distance', order: 'desc' },
+        { key: 'distance_asc', label: '距离从近到远', sortBy: 'distance', order: 'asc' }
+      ] as any[],
+      sortIndex: 0,
+      startDate: '' as string,
+      endDate: '' as string,
+      allCompletedOrders: [] as any[]
+    }
+  },
+  onLoad(options: any) {
+    // 优先通过 URL 查询参数设置默认状态（兼容 H5 / 小程序 等多端）
+    // 例如：/pages/runner/pending-orders?status=active
+    try {
+      const keyFromQuery = options?.status || options?.tab
+      if (keyFromQuery) {
+        const idx = this.statusOptions.findIndex((item: any) => item.key === keyFromQuery)
+        if (idx !== -1) {
+          this.statusIndex = idx
+          console.log('pending-orders 默认状态来自 URL 参数:', keyFromQuery)
+        }
+      }
+    } catch (e) {
+      console.error('解析 URL 参数失败:', e)
+    }
+
+    this.checkRunnerAccessAndInit()
+
+    // 兼容：通过 eventChannel 接收来源页面传递的默认状态参数（仅在支持 getOpenerEventChannel 的平台生效）
+    // @ts-ignore
+    const eventChannel = this.getOpenerEventChannel && this.getOpenerEventChannel()
+    if (eventChannel && eventChannel.on) {
+      eventChannel.on('receiveParams', (params: any) => {
+        try {
+          const key = params?.targetStatusKey
+          if (!key) return
+          const idx = this.statusOptions.findIndex((item: any) => item.key === key)
+          if (idx !== -1 && idx !== this.statusIndex) {
+            this.statusIndex = idx
+            console.log('pending-orders 默认状态来自 eventChannel:', key)
+            // 切换状态后重新加载订单列表
+            this.loadOrders()
+          }
+        } catch (e) {
+          console.error('处理来源参数失败:', e)
+        }
+      })
+    }
+  },
+  onUnload() {
+    this.disconnectWebSocket()
+  },
+  methods: {
+    goBack() {
+      const pages = getCurrentPages && getCurrentPages()
+      if (pages && pages.length > 1) {
+        uni.navigateBack()
+      } else {
+        // 如果是栈顶第一页（比如从首页 redirectTo 过来），直接回到跑腿员首页，避免报错
+        uni.redirectTo({
+          url: '/pages/runner/home'
+        })
+      }
+    },
+
+    checkRunnerAccessAndInit() {
+      const info: any = userState.userInfo
+      if (!info || info.userType !== 2) {
+        uni.showModal({
+          title: '提示',
+          content: '当前账号不是跑腿员，无法查看待接订单',
+          showCancel: false,
+          success: () => {
+            uni.navigateBack()
+          }
+        })
+        return
+      }
+      this.loadAuthInfo()
+      this.loadOrders()
+      this.connectWebSocket()
+    },
+
+    currentStatusKey(): string {
+      const current = this.statusOptions[this.statusIndex]
+      return current ? current.key : 'pending'
+    },
+
+    onStatusTabClick(index: number) {
+      if (index === this.statusIndex) return
+      this.statusIndex = index
+      // 切换状态时重置日期范围
+      if (this.currentStatusKey() !== 'completed') {
+        this.startDate = ''
+        this.endDate = ''
+      }
+      this.loadOrders()
+    },
+
+    // 统一的排序方式选择处理
+    onSortChange(e: any) {
+      const idx = Number(e?.detail?.value || 0)
+      this.sortIndex = idx
+      const option = this.sortOptions[idx] || this.sortOptions[0]
+      this.sortBy = option.sortBy
+      this.sortOrder = option.order
+      this.sortOrders()
+    },
+
+    async loadAuthInfo() {
+      try {
+        this.authInfo = await getRunnerAuthInfo()
+      } catch (error) {
+        console.error('获取认证信息失败:', error)
+        // 如果获取失败，可能是未申请认证
+        this.authInfo = null
+      }
+    },
+
+    async loadOrders() {
+      this.loading = true
+      try {
+        const key = this.currentStatusKey()
+        if (key === 'pending') {
+          this.orders = await getPendingOrders()
+        } else if (key === 'active') {
+          this.orders = await getActiveOrders()
+        } else {
+          const list = await getCompletedOrders()
+          this.allCompletedOrders = list || []
+          this.orders = this.filterCompletedByDate(this.allCompletedOrders)
+        }
+        this.sortOrders()
+      } catch (error) {
+        console.error('获取订单列表失败:', error)
+        uni.showToast({
+          title: '加载失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async handleAcceptOrder(order: any) {
+      // 检查认证状态
+      if (!this.authInfo) {
+        uni.showModal({
+          title: '提示',
+          content: '您还未申请跑腿员认证，请先完成认证后才能接单',
+          showCancel: true,
+          confirmText: '去认证',
+          cancelText: '取消',
+          success: (res) => {
+            if (res.confirm) {
+              uni.navigateTo({
+                url: '/pages/runner/auth-apply'
+              })
+            }
+          }
+        })
+        return
+      }
+
+      // 检查认证状态：1-待审核，2-已通过，3-已驳回
+      if (this.authInfo.certStatus === 1) {
+        uni.showModal({
+          title: '提示',
+          content: '您的认证申请正在审核中，审核通过后才能接单',
+          showCancel: false,
+          confirmText: '查看状态',
+          success: (res) => {
+            if (res.confirm) {
+              uni.navigateTo({
+                url: '/pages/runner/auth-status'
+              })
+            }
+          }
+        })
+        return
+      }
+
+      if (this.authInfo.certStatus === 3) {
+        uni.showModal({
+          title: '提示',
+          content: '您的认证申请未通过，请重新申请认证后才能接单',
+          showCancel: true,
+          confirmText: '重新申请',
+          cancelText: '取消',
+          success: (res) => {
+            if (res.confirm) {
+              uni.navigateTo({
+                url: '/pages/runner/auth-apply'
+              })
+            }
+          }
+        })
+        return
+      }
+
+      if (this.authInfo.certStatus !== 2) {
+        uni.showToast({
+          title: '认证未通过，无法接单',
+          icon: 'none'
+        })
+        return
+      }
+
+      // 认证通过，可以接单
+      uni.showModal({
+        title: '确认接单',
+        content: `确定要接这个订单吗？跑腿收益：¥${order.runnerFee ? order.runnerFee.toFixed(2) : '0.00'}`,
+        success: async (res) => {
+          if (res.confirm) {
+            try {
+              await acceptOrder(order.id)
+              uni.showToast({
+                title: '接单成功',
+                icon: 'success'
+              })
+              // 刷新列表
+              this.loadOrders()
+            } catch (error) {
+              console.error('接单失败:', error)
+              // 如果接单失败，可能是认证状态已变更，重新加载认证信息
+              this.loadAuthInfo()
+              uni.showToast({
+                title: '接单失败，请重试',
+                icon: 'none'
+              })
+            }
+          }
+        }
+      })
+    },
+
+    viewOrderDetail(order: any) {
+      uni.navigateTo({
+        url: `/subpkg/order-detail?orderId=${order.id}`
+      })
+    },
+
+    formatTime(time: string): string {
+      if (!time) return ''
+      return time.replace('T', ' ').substring(0, 19)
+    },
+
+    formatDistance(distance: number): string {
+      if (distance === undefined || distance === null) return ''
+      // 数据库存储的是米，如果>=1000米，显示为公里，否则显示为米
+      if (distance >= 1000) {
+        const km = distance / 1000
+        // 如果公里数是整数，不显示小数，否则保留1位小数
+        if (km % 1 === 0) {
+          return `${km}km`
+        } else {
+          return `${km.toFixed(1)}km`
+        }
+      } else {
+        return `${distance}m`
+      }
+    },
+
+    statusText(order: any): string {
+      const key = this.currentStatusKey()
+      if (key === 'pending') {
+        return '待接单'
+      }
+      if (key === 'active') {
+        return order?.statusText || '服务中'
+      }
+      return order?.statusText || '已完成'
+    },
+
+    statusBadgeClass(): string {
+      const key = this.currentStatusKey()
+      if (key === 'pending') return 'status-pending'
+      if (key === 'active') return 'status-active'
+      return 'status-completed'
+    },
+
+    emptyText(): string {
+      const current = this.statusOptions[this.statusIndex]
+      return current ? current.emptyText : ''
+    },
+
+    emptyHint(): string {
+      const current = this.statusOptions[this.statusIndex]
+      return current ? current.emptyHint : ''
+    },
+
+    // 统一的排序：支持按时间 / 按跑腿收益 / 按距离
+    sortOrders() {
+      if (!this.orders || this.orders.length === 0) return
+      const orderFactor = this.sortOrder === 'desc' ? -1 : 1
+      this.orders.sort((a: any, b: any) => {
+        if (this.sortBy === 'fee') {
+          const fa = typeof a?.runnerFee === 'number' ? a.runnerFee : Number(a?.runnerFee) || 0
+          const fb = typeof b?.runnerFee === 'number' ? b.runnerFee : Number(b?.runnerFee) || 0
+          if (fa === fb) return 0
+          return fa > fb ? orderFactor : -orderFactor
+        } else if (this.sortBy === 'distance') {
+          const da = typeof a?.distance === 'number' ? a.distance : Number(a?.distance) || 0
+          const db = typeof b?.distance === 'number' ? b.distance : Number(b?.distance) || 0
+          if (da === db) return 0
+          return da > db ? orderFactor : -orderFactor
+        } else {
+          const ta = this.parseTime(a?.createTime)
+          const tb = this.parseTime(b?.createTime)
+          if (ta === tb) return 0
+          return ta > tb ? orderFactor : -orderFactor
+        }
+      })
+    },
+
+    parseTime(time: string): number {
+      if (!time) return 0
+      // 兼容 "YYYY-MM-DDTHH:mm:ss" 或 "YYYY-MM-DD HH:mm:ss"
+      const normalized = time.replace('T', ' ').replace(/-/g, '/')
+      const date = new Date(normalized)
+      return date.getTime() || 0
+    },
+
+    // 已完成订单日期过滤
+    filterCompletedByDate(list: any[]): any[] {
+      if (!list || list.length === 0) return []
+      if (!this.startDate && !this.endDate) return list.slice()
+      const start = this.startDate
+      const end = this.endDate
+      return list.filter((item: any) => {
+        const ct = item?.createTime
+        if (!ct) return false
+        const dateStr = ct.substring(0, 10) // YYYY-MM-DD
+        if (start && dateStr < start) return false
+        if (end && dateStr > end) return false
+        return true
+      })
+    },
+
+    onStartDateChange(e: any) {
+      this.startDate = e?.detail?.value || ''
+      this.orders = this.filterCompletedByDate(this.allCompletedOrders)
+      this.sortOrders()
+    },
+
+    onEndDateChange(e: any) {
+      this.endDate = e?.detail?.value || ''
+      this.orders = this.filterCompletedByDate(this.allCompletedOrders)
+      this.sortOrders()
+    },
+
+    resetDateRange() {
+      if (!this.startDate && !this.endDate) return
+      this.startDate = ''
+      this.endDate = ''
+      this.orders = this.filterCompletedByDate(this.allCompletedOrders)
+      this.sortOrders()
+    },
+
+    handleRefresh() {
+      this.loadOrders()
+    },
+
+    loadMore() {
+      // TODO: 实现分页加载
+      console.log('加载更多')
+    },
+
+    // WebSocket连接
+    connectWebSocket() {
+      // TODO: 实现WebSocket连接
+      // 获取当前用户ID
+      // const userId = uni.getStorageSync('userId')
+      // this.wsConnection = uni.connectSocket({
+      //   url: `ws://your-server/ws/order?runnerId=${userId}`,
+      //   success: () => {
+      //     console.log('WebSocket连接成功')
+      //   }
+      // })
+      //
+      // this.wsConnection.onMessage((res) => {
+      //   console.log('收到新订单推送:', res.data)
+      //   // 刷新订单列表
+      //   this.loadOrders()
+      //   // 显示提示
+      //   uni.showToast({
+      //     title: '有新订单',
+      //     icon: 'none'
+      //   })
+      // })
+    },
+
+    disconnectWebSocket() {
+      if (this.wsConnection) {
+        this.wsConnection.close()
+      }
+    },
+
+    // 跳转到确认收货页
+    goConfirmReceive(order: any) {
+      if (!order || !order.id) return
+      uni.navigateTo({
+        url: `/pages/runner/confirm-receive?orderId=${order.id}`
+      })
+    },
+
+    // 跑腿员联系用户
+    handleContactUser(order: any) {
+      if (!order || !order.id) {
+        uni.showToast({
+          title: '订单信息缺失',
+          icon: 'none'
+        })
+        return
+      }
+      uni.navigateTo({
+        url: `/subpkg/chat-session?orderId=${order.id}`
+      })
+    }
+  }
+}
+</script>
+
+<style scoped>
+.pending-orders-container {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f0f9ff 0%, #f9fafb 100%);
+}
+
+/* 导航栏 */
+.navbar {
+  background: #ffffff;
+  padding-top: env(safe-area-inset-top);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+}
+
+.navbar-content {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 88rpx;
+  padding: 0 30rpx;
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.back-btn:active {
+  opacity: 0.6;
+}
+
+.refresh-btn {
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.refresh-btn:active {
+  opacity: 0.6;
+}
+
+.back-icon,
+.refresh-icon {
+  font-size: 44rpx;
+  color: #333333;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.nav-title {
+  flex: 1;
+  text-align: center;
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333333;
+  white-space: nowrap;
+  padding: 0 20rpx;
+}
+
+/* 状态 + 排序条 */
+.status-sort-bar {
+  padding: 12rpx 20rpx 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.status-tabs {
+  flex: 1;
+  background: #e5edff;
+  border-radius: 999rpx;
+  padding: 4rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.status-tab {
+  flex: 1;
+  height: 60rpx;
+  border-radius: 999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1d4ed8;
+  font-size: 26rpx;
+}
+
+.status-tab.active {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  color: #ffffff;
+  box-shadow: 0 6rpx 16rpx rgba(37, 99, 235, 0.3);
+}
+
+.status-tab-title {
+  font-weight: 500;
+}
+
+.sort-box {
+  padding: 0 18rpx;
+  height: 60rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #d1d5db;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 6rpx;
+  background-color: #ffffff;
+}
+
+.sort-text {
+  font-size: 24rpx;
+  color: #374151;
+}
+
+.sort-icon {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+/* 已完成订单日期筛选 */
+.date-filter-bar {
+  padding: 8rpx 20rpx 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+}
+
+/* 让两个日期选择器在一行中尽量拉满空间 */
+.date-filter-bar picker {
+  flex: 1;
+}
+
+.date-item {
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 8rpx 14rpx;
+  border-radius: 12rpx;
+  background-color: #f3f4f6;
+}
+
+.date-label {
+  font-size: 22rpx;
+  color: #6b7280;
+}
+
+.date-value {
+  margin-top: 4rpx;
+  font-size: 24rpx;
+  color: #111827;
+}
+
+.date-separator {
+  font-size: 26rpx;
+  color: #6b7280;
+}
+
+.date-reset {
+  padding: 8rpx 14rpx;
+  border-radius: 999rpx;
+  border: 1rpx solid #d1d5db;
+}
+
+.date-reset-text {
+  font-size: 22rpx;
+  color: #6b7280;
+}
+
+/* 订单列表 */
+.order-list {
+  padding: 16rpx 30rpx;
+  padding-bottom: calc(110rpx + env(safe-area-inset-bottom) + 24rpx);
+}
+
+.order-item {
+  background: #ffffff;
+  border-radius: 24rpx;
+  margin-bottom: 24rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.08);
+  border: 1rpx solid rgba(37, 99, 235, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 28rpx 26rpx;
+}
+
+.order-item:active {
+  transform: translateY(-4rpx) scale(0.98);
+  box-shadow: 0 8rpx 32rpx rgba(37, 99, 235, 0.15);
+}
+
+/* 横向简略卡片 */
+.order-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.row-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 18rpx;
+}
+
+.badge {
+  flex-shrink: 0;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid transparent;
+}
+
+.badge-text {
+  font-size: 24rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.status-pending {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.1) 100%);
+  border: 1rpx solid rgba(245, 158, 11, 0.2);
+}
+
+.status-pending .badge-text {
+  color: #d97706;
+}
+
+.status-active {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.15) 0%, rgba(59, 130, 246, 0.1) 100%);
+  border: 1rpx solid rgba(37, 99, 235, 0.2);
+}
+
+.status-active .badge-text {
+  color: #1d4ed8;
+}
+
+.status-completed {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(5, 150, 105, 0.1) 100%);
+  border: 1rpx solid rgba(16, 185, 129, 0.2);
+}
+
+.status-completed .badge-text {
+  color: #047857;
+}
+
+.main-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.type {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.route {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10rpx;
+  color: #475569;
+}
+
+.route-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 26rpx;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.route-arrow {
+  flex-shrink: 0;
+  font-size: 26rpx;
+  color: #94a3b8;
+}
+
+.row-right {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.amount {
+  font-size: 34rpx;
+  font-weight: 800;
+  color: #f97316;
+  white-space: nowrap;
+}
+
+.chevron {
+  font-size: 44rpx;
+  color: #cbd5e1;
+  line-height: 1;
+}
+
+.order-meta {
+  margin-top: 16rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f1f5f9;
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 16rpx;
+  flex-wrap: wrap;
+}
+
+.meta-item {
+  font-size: 24rpx;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 备注信息 */
+.remark-row {
+  margin-top: 16rpx;
+  padding: 16rpx;
+  background: #fff3cd;
+  border-radius: 12rpx;
+  display: flex;
+  flex-direction: row;
+  gap: 8rpx;
+}
+
+.remark-label {
+  font-size: 24rpx;
+  color: #856404;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.remark-text {
+  font-size: 24rpx;
+  color: #856404;
+  line-height: 1.6;
+  flex: 1;
+  word-break: break-all;
+}
+
+/* 操作按钮 */
+.action-section {
+  margin-top: 20rpx;
+  display: flex;
+  gap: 20rpx;
+}
+
+.accept-btn {
+  flex: 1;
+  height: 140rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 60%, #60a5fa 100%);
+  border-radius: 70rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 20rpx rgba(37, 99, 235, 0.3);
+  transition: all 0.3s;
+}
+
+.accept-btn:active {
+  transform: scale(0.95);
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
+}
+
+.btn-text {
+  font-size: 36rpx;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+/* 确认收货按钮（服务中列表） */
+.confirm-receive-btn {
+  flex: 1;
+  height: 120rpx;
+  /* 与小程序主色系统一的蓝色渐变，但比“立即接单”略浅，区分语义 */
+  background: linear-gradient(135deg, #1d4ed8 0%, #3b82f6 50%, #60a5fa 100%);
+  border-radius: 70rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 20rpx rgba(37, 99, 235, 0.28);
+  transition: all 0.3s;
+}
+
+.confirm-receive-btn:active {
+  transform: scale(0.96);
+  box-shadow: 0 4rpx 12rpx rgba(22, 163, 74, 0.3);
+}
+
+/* 联系用户按钮（服务中列表） */
+.contact-user-btn {
+  flex: 1;
+  height: 120rpx;
+  background: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%);
+  border-radius: 70rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 20rpx rgba(16, 185, 129, 0.28);
+  transition: all 0.3s;
+}
+
+.contact-user-btn:active {
+  transform: scale(0.96);
+  box-shadow: 0 4rpx 12rpx rgba(16, 185, 129, 0.3);
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 200rpx 0;
+}
+
+.empty-icon-wrapper {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 40rpx;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+}
+
+.empty-text {
+  font-size: 32rpx;
+  color: #64748b;
+  font-weight: 600;
+  margin-bottom: 16rpx;
+}
+
+.empty-hint {
+  font-size: 26rpx;
+  color: #94a3b8;
+}
+
+/* 加载状态 */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80rpx 0;
+  gap: 24rpx;
+}
+
+.loading-spinner {
+  width: 60rpx;
+  height: 60rpx;
+  border: 4rpx solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #94a3b8;
+}
+</style>

@@ -1,0 +1,449 @@
+<template>
+  <view class="runner-profile-container">
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="nav-title">跑腿员信息</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <scroll-view class="content-scroll" scroll-y enable-back-to-top>
+      <view v-if="loading" class="loading-section">
+        <text class="loading-text">加载中...</text>
+      </view>
+
+      <view v-else-if="runnerInfo" class="profile-content">
+        <view class="header-section">
+          <image
+            class="avatar"
+            :src="runnerInfo.avatar || '/static/images/default-avatar.png'"
+            mode="aspectFill"
+          />
+          <text class="nickname">{{ runnerInfo.nickname }}</text>
+          <view class="credit-row">
+            <text class="credit-label">信用等级</text>
+            <view class="star-list">
+              <text
+                v-for="n in 5"
+                :key="n"
+                class="star"
+                :class="{ active: n <= runnerInfo.creditLevel }"
+              >
+                ★
+              </text>
+            </view>
+          </view>
+        </view>
+
+        <view class="stats-section">
+          <view class="section-title">
+            <text class="title-icon">📊</text>
+            <text class="title-text">服务统计</text>
+          </view>
+          <view class="stats-card">
+            <view class="stat-item">
+              <text class="stat-value">{{ runnerInfo.totalOrders }}</text>
+              <text class="stat-label">完成订单</text>
+            </view>
+            <view class="stat-divider"></view>
+            <view class="stat-item">
+              <text class="stat-value">{{ formatGoodRate(runnerInfo.goodRate) }}%</text>
+              <text class="stat-label">好评率</text>
+            </view>
+            <view class="stat-divider"></view>
+            <view class="stat-item">
+              <text class="stat-value">{{ runnerInfo.serviceTime || '未设置' }}</text>
+              <text class="stat-label">服务时间</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="info-section">
+          <view class="section-title">
+            <text class="title-icon">📍</text>
+            <text class="title-text">服务范围</text>
+          </view>
+          <view class="info-card">
+            <view class="info-row">
+              <text class="info-label">服务范围</text>
+              <text class="info-value">{{ formatServiceRange(runnerInfo.serviceRange) }}</text>
+            </view>
+            <view class="info-row" v-if="runnerInfo.certTime">
+              <text class="info-label">认证时间</text>
+              <text class="info-value">{{ formatTime(runnerInfo.certTime) }}</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="credit-desc-section">
+          <view class="section-title">
+            <text class="title-icon">⭐</text>
+            <text class="title-text">信用等级说明</text>
+          </view>
+          <view class="credit-desc-card">
+            <view class="credit-level-item" v-for="item in creditLevelDesc" :key="item.level">
+              <view class="level-stars">
+                <text
+                  v-for="n in 5"
+                  :key="n"
+                  class="level-star"
+                  :class="{ active: n <= item.level }"
+                >
+                  ★
+                </text>
+              </view>
+              <text class="level-desc">{{ item.desc }}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view v-else class="error-section">
+        <text class="error-text">跑腿员信息不存在</text>
+      </view>
+    </scroll-view>
+  </view>
+</template>
+
+<script>
+import { getRunnerPublicInfo, type RunnerPublicInfo } from '@/common/api/runner.uts'
+
+export default {
+  data() {
+    return {
+      runnerUserId: 0 as number,
+      loading: false,
+      runnerInfo: null as RunnerPublicInfo | null,
+      creditLevelDesc: [
+        { level: 5, desc: '完成订单≥100且好评率≥95%' },
+        { level: 4, desc: '完成订单≥50且好评率≥90%' },
+        { level: 3, desc: '完成订单≥20且好评率≥85%' },
+        { level: 2, desc: '完成订单≥5且好评率≥80%' },
+        { level: 1, desc: '新注册跑腿员' }
+      ] as Array<{ level: number, desc: string }>
+    }
+  },
+  onLoad(options) {
+    if (options.runnerUserId) {
+      this.runnerUserId = parseInt(options.runnerUserId)
+      this.loadRunnerInfo()
+    } else {
+      uni.showToast({
+        title: '跑腿员ID缺失',
+        icon: 'none'
+      })
+    }
+  },
+  methods: {
+    async loadRunnerInfo() {
+      try {
+        this.loading = true
+        const res = await getRunnerPublicInfo(this.runnerUserId)
+        this.runnerInfo = res
+      } catch (error) {
+        console.error('获取跑腿员信息失败:', error)
+        uni.showToast({
+          title: '加载失败',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    goBack() {
+      uni.navigateBack()
+    },
+
+    formatGoodRate(rate: number): string {
+      if (rate === null || rate === undefined) return '0.0'
+      return rate.toFixed(1)
+    },
+
+    formatServiceRange(range: number): string {
+      if (!range) return '未设置'
+      if (range >= 1000) {
+        return (range / 1000).toFixed(1) + '公里'
+      }
+      return range + '米'
+    },
+
+    formatTime(time: string): string {
+      if (!time) return ''
+      return time.replace('T', ' ').substring(0, 19)
+    }
+  }
+}
+</script>
+
+<style scoped>
+.runner-profile-container {
+  min-height: 100vh;
+  background: var(--background-color, #f9fafb);
+  display: flex;
+  flex-direction: column;
+}
+
+.content-scroll {
+  flex: 1;
+  padding-bottom: 40rpx;
+}
+
+.navbar {
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  padding: 60rpx 30rpx 30rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  box-shadow: 0 4rpx 20rpx rgba(37, 99, 235, 0.15);
+  position: relative;
+}
+
+.back-btn {
+  width: 80rpx;
+  height: 80rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+.back-icon {
+  font-size: 40rpx;
+  color: #ffffff;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ffffff;
+  letter-spacing: 1rpx;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.placeholder {
+  width: 80rpx;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.loading-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 0;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #9ca3af;
+}
+
+.error-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 0;
+}
+
+.error-text {
+  font-size: 28rpx;
+  color: #ef4444;
+}
+
+.header-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60rpx 30rpx 40rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+}
+
+.avatar {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 50%;
+  border: 6rpx solid rgba(255, 255, 255, 0.8);
+  background: #f1f5f9;
+  margin-bottom: 20rpx;
+}
+
+.nickname {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ffffff;
+  margin-bottom: 16rpx;
+}
+
+.credit-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 12rpx 24rpx;
+  border-radius: 999rpx;
+}
+
+.credit-label {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.9);
+  margin-right: 12rpx;
+}
+
+.star-list {
+  display: flex;
+  flex-direction: row;
+}
+
+.star {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.5);
+  margin-left: 4rpx;
+}
+
+.star.active {
+  color: #fbbf24;
+}
+
+.stats-section {
+  margin: 24rpx 30rpx;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.title-icon {
+  font-size: 32rpx;
+  margin-right: 10rpx;
+}
+
+.title-text {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: var(--text-color, #333333);
+}
+
+.stats-card {
+  background: var(--list-background-color, #ffffff);
+  border-radius: 20rpx;
+  padding: 30rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.stat-value {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #2563eb;
+  margin-bottom: 8rpx;
+  white-space: nowrap;
+}
+
+.stat-label {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.stat-divider {
+  width: 1rpx;
+  height: 60rpx;
+  background: #e5e7eb;
+}
+
+.info-section {
+  margin: 0 30rpx 24rpx;
+}
+
+.info-card {
+  background: var(--list-background-color, #ffffff);
+  border-radius: 20rpx;
+  padding: 30rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.info-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx 0;
+}
+
+.info-row:not(:last-child) {
+  border-bottom: 1rpx solid #f5f5f5;
+}
+
+.info-label {
+  font-size: 28rpx;
+  color: #6b7280;
+}
+
+.info-value {
+  font-size: 28rpx;
+  color: var(--text-color, #333333);
+}
+
+.credit-desc-section {
+  margin: 0 30rpx 24rpx;
+}
+
+.credit-desc-card {
+  background: var(--list-background-color, #ffffff);
+  border-radius: 20rpx;
+  padding: 30rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.credit-level-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16rpx 0;
+}
+
+.credit-level-item:not(:last-child) {
+  border-bottom: 1rpx solid #f5f5f5;
+}
+
+.level-stars {
+  display: flex;
+  flex-direction: row;
+}
+
+.level-star {
+  font-size: 24rpx;
+  color: #e5e7eb;
+  margin-right: 4rpx;
+}
+
+.level-star.active {
+  color: #fbbf24;
+}
+
+.level-desc {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+</style>

@@ -1,0 +1,561 @@
+<template>
+  <view class="evaluate-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="navbar-inner">
+        <view class="back-btn" @click="goBack">
+          <text class="back-icon">‹</text>
+        </view>
+        <text class="nav-title">订单评价</text>
+        <view class="right-placeholder"></view>
+      </view>
+    </view>
+
+    <!-- 服务质量评分 -->
+    <view class="rating-section">
+      <text class="rating-title">服务质量评分</text>
+      <view class="stars-wrapper">
+        <view
+          v-for="star in 5"
+          :key="star"
+          class="star-item"
+          @click="selectServiceRating(star)"
+        >
+          <text class="star-icon" :class="{ active: star <= serviceRating }">
+            {{ star <= serviceRating ? '⭐' : '☆' }}
+          </text>
+        </view>
+      </view>
+      <text class="rating-desc">{{ getServiceRatingDesc() }}</text>
+    </view>
+
+    <!-- 服务态度评分 -->
+    <view class="rating-section attitude-section">
+      <text class="rating-title">服务态度评分</text>
+      <view class="stars-wrapper">
+        <view
+          v-for="star in 5"
+          :key="star"
+          class="star-item"
+          @click="selectAttitudeRating(star)"
+        >
+          <text class="star-icon" :class="{ active: star <= attitudeRating }">
+            {{ star <= attitudeRating ? '⭐' : '☆' }}
+          </text>
+        </view>
+      </view>
+      <text class="rating-desc">{{ getAttitudeRatingDesc() }}</text>
+    </view>
+
+    <!-- 评价标签 -->
+    <view class="tags-section">
+      <text class="section-title">评价标签</text>
+      <view class="tags-wrapper">
+        <view
+          v-for="(tag, index) in tagOptions"
+          :key="index"
+          class="tag-item"
+          :class="{ active: selectedTags.includes(tag) }"
+          @click="toggleTag(tag)"
+        >
+          <text class="tag-text">{{ tag }}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 评价内容 -->
+    <view class="content-section">
+      <text class="section-title">评价内容</text>
+      <view class="textarea-wrapper">
+        <textarea
+          class="content-input"
+          v-model="content"
+          placeholder="分享您的使用体验，帮助其他用户做出选择"
+          maxlength="200"
+        ></textarea>
+        <text class="char-count">{{ content.length }}/200</text>
+      </view>
+    </view>
+
+    <!-- 评价图片 -->
+    <view class="images-section">
+      <text class="section-title">评价图片（可选）</text>
+      <view class="images-wrapper">
+        <view
+          v-for="(url, index) in imageList"
+          :key="index"
+          class="image-item"
+        >
+          <image
+            class="eval-image"
+            :src="url"
+            mode="aspectFill"
+            @click="previewImage(index)"
+          />
+          <view class="delete-icon" @click.stop="removeImage(index)">✕</view>
+        </view>
+        <view
+          v-if="imageList.length < maxImages"
+          class="image-item upload-item"
+          @click="chooseImages"
+        >
+          <text class="upload-plus">＋</text>
+          <text class="upload-text">添加图片</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 提交按钮 -->
+    <view class="submit-section">
+      <button class="submit-btn" @click="handleSubmit" :loading="submitting">
+        <text class="btn-text">提交评价</text>
+      </button>
+    </view>
+  </view>
+</template>
+
+<script>
+import { evaluateOrder } from '@/common/api/order.uts'
+import { upload } from '@/common/utils/request.uts'
+
+export default {
+  data() {
+    return {
+      orderId: 0,
+      serviceRating: 5,
+      attitudeRating: 5,
+      content: '',
+      imageList: [] as string[],
+      maxImages: 6,
+      selectedTags: [] as string[],
+      tagOptions: [
+        '服务态度好',
+        '配送速度快',
+        '物品完好',
+        '准时送达',
+        '沟通及时',
+        '专业可靠'
+      ],
+      submitting: false
+    }
+  },
+  onLoad(options) {
+    if (options.orderId) {
+      this.orderId = parseInt(options.orderId)
+    }
+  },
+  methods: {
+    selectServiceRating(star: number) {
+      this.serviceRating = star
+    },
+
+    selectAttitudeRating(star: number) {
+      this.attitudeRating = star
+    },
+
+    getServiceRatingDesc(): string {
+      switch (this.serviceRating) {
+        case 1:
+          return '非常不满意'
+        case 2:
+          return '不满意'
+        case 3:
+          return '一般'
+        case 4:
+          return '满意'
+        case 5:
+          return '非常满意'
+        default:
+          return ''
+      }
+    },
+
+    getAttitudeRatingDesc(): string {
+      switch (this.attitudeRating) {
+        case 1:
+          return '非常不满意'
+        case 2:
+          return '不满意'
+        case 3:
+          return '一般'
+        case 4:
+          return '满意'
+        case 5:
+          return '非常满意'
+        default:
+          return ''
+      }
+    },
+
+    toggleTag(tag: string) {
+      const index = this.selectedTags.indexOf(tag)
+      if (index > -1) {
+        this.selectedTags.splice(index, 1)
+      } else {
+        this.selectedTags.push(tag)
+      }
+    },
+
+    goBack() {
+      uni.navigateBack()
+    },
+
+    async handleSubmit() {
+      if (this.serviceRating === 0) {
+        uni.showToast({
+          title: '请选择服务质量评分',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (this.attitudeRating === 0) {
+        uni.showToast({
+          title: '请选择服务态度评分',
+          icon: 'none'
+        })
+        return
+      }
+
+      this.submitting = true
+      try {
+        await evaluateOrder({
+          orderId: this.orderId,
+          serviceScore: this.serviceRating,
+          attitudeScore: this.attitudeRating,
+          content: this.content,
+          tags: JSON.stringify(this.selectedTags),
+          images: JSON.stringify(this.imageList)
+        })
+
+        uni.showToast({
+          title: '评价成功',
+          icon: 'success'
+        })
+
+        setTimeout(() => {
+          uni.navigateBack()
+        }, 1500)
+      } catch (error) {
+        console.error('评价失败:', error)
+      } finally {
+        this.submitting = false
+      }
+    },
+
+    async chooseImages() {
+      const remain = this.maxImages - this.imageList.length
+      if (remain <= 0) return
+      uni.chooseImage({
+        count: remain,
+        sizeType: ['compressed'],
+        sourceType: ['album', 'camera'],
+        success: async (res) => {
+          const paths = res.tempFilePaths || []
+          if (!paths.length) return
+          uni.showLoading({ title: '上传中...' })
+          try {
+            for (const p of paths) {
+              const url = await upload('/file/upload/review', p, { orderId: this.orderId })
+              if (url) {
+                this.imageList.push(url as string)
+              }
+            }
+          } catch (e) {
+            console.error('上传评价图片失败:', e)
+            uni.showToast({ title: '图片上传失败', icon: 'none' })
+          } finally {
+            uni.hideLoading()
+          }
+        }
+      })
+    },
+
+    previewImage(index: number) {
+      if (!this.imageList.length) return
+      uni.previewImage({
+        current: this.imageList[index],
+        urls: this.imageList
+      })
+    },
+
+    removeImage(index: number) {
+      this.imageList.splice(index, 1)
+    }
+  }
+}
+</script>
+
+<style scoped>
+.evaluate-container {
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding-bottom: 150rpx;
+}
+
+/* 导航栏 */
+.navbar {
+  padding-top: env(safe-area-inset-top);
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  box-shadow: 0 4rpx 16rpx rgba(37, 99, 235, 0.25);
+}
+
+.navbar-inner {
+  height: 88rpx;
+  padding: 0 30rpx 16rpx;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-icon {
+  font-size: 36rpx;
+  color: #ffffff;
+}
+
+.nav-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.right-placeholder {
+  width: 64rpx;
+}
+
+/* 评分区域 */
+.rating-section {
+  margin: 30rpx;
+  padding: 40rpx;
+  background: #ffffff;
+  border-radius: 20rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.attitude-section {
+  margin-top: 0;
+}
+
+.rating-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333333;
+  margin-bottom: 30rpx;
+}
+
+.stars-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
+  margin-bottom: 20rpx;
+}
+
+.star-item {
+  cursor: pointer;
+}
+
+.star-icon {
+  font-size: 80rpx;
+  color: #e0e0e0;
+  transition: all 0.3s;
+}
+
+.star-icon.active {
+  color: #ffd700;
+}
+
+.rating-desc {
+  font-size: 28rpx;
+  color: #666666;
+}
+
+/* 评价图片 */
+.images-section {
+  margin: 0 30rpx 30rpx;
+  padding: 30rpx 30rpx 24rpx;
+  background: #ffffff;
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.images-wrapper {
+  margin-top: 16rpx;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.image-item {
+  position: relative;
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 16rpx;
+  overflow: hidden;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.eval-image {
+  width: 100%;
+  height: 100%;
+}
+
+.delete-icon {
+  position: absolute;
+  top: 4rpx;
+  right: 4rpx;
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 18rpx;
+  background: rgba(0, 0, 0, 0.5);
+  color: #ffffff;
+  font-size: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-item {
+  border: 1rpx dashed #cbd5e1;
+  background: #f9fafb;
+  flex-direction: column;
+}
+
+.upload-plus {
+  font-size: 40rpx;
+  color: #2563eb;
+}
+
+.upload-text {
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: #6b7280;
+}
+
+/* 评价标签 */
+.tags-section {
+  margin: 0 30rpx 30rpx;
+  padding: 30rpx;
+  background: #ffffff;
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333333;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.tags-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+}
+
+.tag-item {
+  padding: 15rpx 30rpx;
+  background: #f5f5f5;
+  border-radius: 50rpx;
+  border: 2rpx solid transparent;
+  transition: all 0.3s;
+}
+
+.tag-item.active {
+  background: #e3f2fd;
+  border-color: #4facfe;
+}
+
+.tag-text {
+  font-size: 26rpx;
+  color: #666666;
+}
+
+.tag-item.active .tag-text {
+  color: #4facfe;
+  font-weight: bold;
+}
+
+/* 评价内容 */
+.content-section {
+  margin: 0 30rpx 30rpx;
+  padding: 30rpx;
+  background: #ffffff;
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+.textarea-wrapper {
+  position: relative;
+}
+
+.content-input {
+  width: 100%;
+  min-height: 200rpx;
+  font-size: 28rpx;
+  color: #333333;
+  line-height: 1.6;
+  padding: 20rpx;
+  background: #f5f5f5;
+  border-radius: 15rpx;
+}
+
+.char-count {
+  display: block;
+  text-align: right;
+  font-size: 24rpx;
+  color: #999999;
+  margin-top: 10rpx;
+}
+
+/* 提交按钮 */
+.submit-section {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20rpx 30rpx calc(20rpx + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 -4rpx 16rpx rgba(148, 163, 184, 0.4);
+}
+
+.submit-btn {
+  width: 100%;
+  height: 88rpx;
+  border-radius: 999rpx;
+  /* 与整体小程序主题统一的蓝色主按钮 */
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 55%, #60a5fa 100%);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 20rpx rgba(37, 99, 235, 0.5);
+}
+
+.btn-text {
+  font-size: 32rpx;
+  color: #ffffff;
+  font-weight: bold;
+}
+</style>

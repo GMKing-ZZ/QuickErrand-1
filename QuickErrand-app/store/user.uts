@@ -1,0 +1,113 @@
+/**
+ * 用户状态管理
+ */
+
+export type UserInfo = {
+  id: number | null
+  username: string
+  nickname: string
+  phone: string
+  avatar: string
+  userType: number // 1-普通用户 2-跑腿员
+  isRunner?: boolean // 是否是跑腿员（兼容旧数据，可选）
+  runnerStatus?: number // 跑腿员状态：0-未认证 1-认证中 2-已认证 3-已拒绝（可选）
+}
+
+type UserState = {
+  token: string | null
+  userInfo: UserInfo | null
+  isLogin: boolean
+}
+
+const TOKEN_KEY = 'token'
+const USER_INFO_KEY = 'userInfo'
+
+// 从本地存储获取token
+const getToken = () : string | null => {
+  const token = uni.getStorageSync(TOKEN_KEY)
+  return token ? token as string : null
+}
+
+// 从本地存储获取用户信息
+const getUserInfo = () : UserInfo | null => {
+  const userInfo = uni.getStorageSync(USER_INFO_KEY)
+  return userInfo ? userInfo as UserInfo : null
+}
+
+export const userState = reactive({
+  token: getToken(),
+  userInfo: getUserInfo(),
+  isLogin: getToken() !== null
+} as UserState)
+
+/**
+ * 设置Token
+ */
+export const setToken = (token : string) => {
+  userState.token = token
+  userState.isLogin = true
+  uni.setStorageSync(TOKEN_KEY, token)
+}
+
+/**
+ * 设置用户信息
+ */
+export const setUserInfo = (userInfo : UserInfo) => {
+  userState.userInfo = userInfo
+  uni.setStorageSync(USER_INFO_KEY, userInfo)
+}
+
+/**
+ * 登录
+ */
+export const login = (token : string, userInfo : UserInfo) => {
+  setToken(token)
+  setUserInfo(userInfo)
+}
+
+/**
+ * 退出登录
+ */
+export const logout = () => {
+  userState.token = null
+  userState.userInfo = null
+  userState.isLogin = false
+  uni.removeStorageSync(TOKEN_KEY)
+  uni.removeStorageSync(USER_INFO_KEY)
+  // 清理 uni-im 登录状态（与 Travel 项目一致，避免 IM 仍认为已登录）
+  uni.removeStorageSync('uni_id_token')
+  uni.setStorageSync('uni_id_token_expired', 0)
+  uni.removeStorageSync('uni-id-pages-userInfo')
+
+  // 跳转到登录页
+  uni.reLaunch({
+    url: '/subpkg/login'
+  })
+}
+
+/**
+ * 更新用户信息
+ */
+export const updateUserInfo = (userInfo : Partial<UserInfo>) => {
+  if (userState.userInfo) {
+    userState.userInfo = { ...userState.userInfo, ...userInfo }
+    uni.setStorageSync(USER_INFO_KEY, userState.userInfo)
+  }
+}
+
+/**
+ * 检查是否登录
+ */
+export const checkLogin = () : boolean => {
+  return userState.isLogin
+}
+
+/**
+ * 检查是否是跑腿员
+ */
+export const checkIsRunner = () : boolean => {
+  const info = userState.userInfo
+  if (!info) return false
+  // 兼容逻辑：userType=2 视为跑腿员；如果有 isRunner 字段也一并考虑
+  return info.userType === 2 || info.isRunner === true
+}

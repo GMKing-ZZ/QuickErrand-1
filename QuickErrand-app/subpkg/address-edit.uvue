@@ -1,0 +1,1001 @@
+<template>
+  <view class="address-edit-container">
+    <!-- 头部背景 -->
+    <view class="header-bg">
+      <view class="wave"></view>
+    </view>
+
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">‹</text>
+      </view>
+      <text class="nav-title">{{ isEdit ? '编辑地址' : '添加地址' }}</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 表单内容 -->
+    <view class="form-content">
+      <view class="form-group">
+        <!-- 联系人 -->
+        <view class="form-item">
+          <view class="form-label-wrapper">
+            <text class="form-label-icon">👤</text>
+            <text class="form-label">联系人</text>
+          </view>
+          <input
+            class="form-input"
+            v-model="formData.contactName"
+            placeholder="请输入联系人姓名"
+            placeholder-style="color: #9ca3af"
+            maxlength="20"
+          />
+        </view>
+
+        <!-- 联系电话 -->
+        <view class="form-item">
+          <view class="form-label-wrapper">
+            <text class="form-label-icon">📱</text>
+            <text class="form-label">联系电话</text>
+          </view>
+          <input
+            class="form-input"
+            type="number"
+            v-model="formData.contactPhone"
+            placeholder="请输入联系电话"
+            placeholder-style="color: #9ca3af"
+            maxlength="11"
+          />
+        </view>
+
+        <!-- 所在地区 -->
+        <picker
+          mode="region"
+          :value="regionValue"
+          @change="onRegionChange"
+        >
+          <view class="form-item">
+            <view class="form-label-wrapper">
+              <text class="form-label-icon">📍</text>
+              <text class="form-label">所在地区</text>
+            </view>
+            <view class="form-value-wrapper">
+              <text class="form-value" :class="{ 'placeholder-text': !regionText }">
+                {{ regionText || '请选择省市区' }}
+              </text>
+              <text class="form-arrow">›</text>
+            </view>
+          </view>
+        </picker>
+
+        <!-- 详细地址 -->
+        <view class="form-item form-item-textarea">
+          <view class="form-label-wrapper form-label-wrapper-textarea">
+            <text class="form-label-icon">🏠</text>
+            <text class="form-label">详细地址</text>
+          </view>
+          <textarea
+            class="form-textarea"
+            v-model="formData.detailAddress"
+            placeholder="请输入详细地址（街道、门牌号等）"
+            placeholder-style="color: #9ca3af"
+            maxlength="200"
+            :auto-height="true"
+          />
+        </view>
+
+        <!-- 地图选择位置 -->
+        <view class="form-item" @click="chooseLocation">
+          <view class="form-label-wrapper">
+            <text class="form-label-icon">🗺️</text>
+            <text class="form-label">选择位置</text>
+          </view>
+          <view class="form-value-wrapper">
+            <text class="form-value" :class="{ 'placeholder-text': !locationText }">
+              {{ locationText || '点击选择地图位置' }}
+            </text>
+            <text class="form-arrow">›</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 设为默认地址 -->
+      <view class="form-group form-group-switch">
+        <view class="form-item form-item-switch">
+          <view class="form-label-wrapper form-label-wrapper-switch">
+            <text class="form-label-icon">⭐</text>
+            <text class="form-label form-label-switch">设为默认地址</text>
+          </view>
+          <switch
+            :checked="formData.isDefault === 1"
+            @change="onDefaultChange"
+            color="#2563eb"
+          />
+        </view>
+      </view>
+    </view>
+
+    <!-- 保存按钮 -->
+    <view class="save-section">
+      <button class="save-btn" @click="handleSave" :loading="loading" :disabled="loading">
+        <text class="btn-text">{{ loading ? '保存中...' : '保存' }}</text>
+      </button>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getAddressDetail, addAddress, updateAddress } from '@/common/api/address.uts'
+import { MAP_CONFIG } from '@/common/config/map.uts'
+
+export default {
+  data() {
+    return {
+      isEdit: false,
+      addressId: 0,
+      formData: {
+        contactName: '',
+        contactPhone: '',
+        province: '',
+        city: '',
+        district: '',
+        detailAddress: '',
+        longitude: '',
+        latitude: '',
+        isDefault: 0
+      },
+      loading: false,
+      regionValue: []
+    }
+  },
+  computed: {
+    regionText() {
+      if (this.formData.province && this.formData.city && this.formData.district) {
+        return `${this.formData.province} ${this.formData.city} ${this.formData.district}`
+      }
+      return ''
+    },
+    locationText() {
+      if (this.formData.latitude && this.formData.longitude) {
+        return '已选择位置'
+      }
+      return ''
+    }
+  },
+  onLoad(options) {
+    if (options.id) {
+      this.isEdit = true
+      this.addressId = parseInt(options.id)
+      this.loadAddressDetail()
+    }
+  },
+  onShow() {
+    // 不再需要从自定义地图页面返回的数据处理
+  },
+  methods: {
+    async loadAddressDetail() {
+      try {
+        const res = await getAddressDetail(this.addressId)
+        this.formData = {
+          contactName: res.contactName,
+          contactPhone: res.contactPhone,
+          province: res.province,
+          city: res.city,
+          district: res.district,
+          detailAddress: res.detailAddress,
+          longitude: res.longitude,
+          latitude: res.latitude,
+          isDefault: res.isDefault
+        }
+        this.regionValue = [res.province, res.city, res.district]
+      } catch (error) {
+        console.error('获取地址详情失败:', error)
+      }
+    },
+
+    goBack() {
+      const pages = getCurrentPages()
+      if (pages.length > 1) {
+        uni.navigateBack()
+      } else {
+        // 如果是第一个页面，则跳转到地址列表页面
+        uni.redirectTo({
+          url: '/subpkg/address-list'
+        })
+      }
+    },
+
+    onRegionChange(e) {
+      const value = e.detail.value
+      const province = value[0] || ''
+      const city = value[1] || ''
+      const district = value[2] || ''
+      
+      // 检查是否为直辖市（北京市、天津市、重庆市、上海市）
+      const isMunicipality = province.includes('北京') || province.includes('天津') || 
+                             province.includes('重庆') || province.includes('上海')
+      
+      if (isMunicipality) {
+        // 直辖市：省名 = 市名
+        this.formData.province = province
+        this.formData.city = province
+        this.formData.district = district
+        this.regionValue = [province, province, district]
+      } else {
+        // 普通省份
+        this.formData.province = province
+        this.formData.city = city
+        this.formData.district = district
+        this.regionValue = value
+      }
+    },
+
+    onDefaultChange(e) {
+      this.formData.isDefault = e.detail.value ? 1 : 0
+    },
+
+    chooseLocation() {
+      // 使用微信小程序自带的位置选择
+      uni.chooseLocation({
+        success: (res) => {
+          console.log('选择位置成功:', res)
+          // 保存经纬度
+          this.formData.latitude = res.latitude.toString()
+          this.formData.longitude = res.longitude.toString()
+          
+          // 使用高德地图逆地理编码解析地址
+          this.reverseGeocode(res.latitude, res.longitude)
+          
+          uni.showToast({
+            title: '位置选择成功',
+            icon: 'success',
+            duration: 1500
+          })
+        },
+        fail: (err) => {
+          console.error('选择位置失败:', err)
+          let errorMsg = '选择位置失败，请重试'
+          if (err.errMsg) {
+            if (err.errMsg.includes('auth deny') || err.errMsg.includes('permission')) {
+              errorMsg = '需要位置权限，请在设置中开启'
+            } else if (err.errMsg.includes('cancel')) {
+              // 用户取消，不显示错误提示
+              return
+            } else {
+              errorMsg = err.errMsg
+            }
+          }
+          uni.showToast({
+            title: errorMsg,
+            icon: 'none',
+            duration: 2000
+          })
+        }
+      })
+    },
+
+    // 处理从地图选择页面返回的位置信息
+    onLocationSelected(locationData: any) {
+      console.log('收到选择的位置:', locationData)
+      // 保存经纬度
+      this.formData.latitude = locationData.latitude.toString()
+      this.formData.longitude = locationData.longitude.toString()
+      
+      // 如果地址为空，使用逆地理编码解析地址
+      if (!locationData.address || locationData.address === '') {
+        this.reverseGeocode(locationData.latitude, locationData.longitude)
+      } else {
+        // 解析地址信息
+        this.parseAddressFromLocation(locationData)
+      }
+      
+      uni.showToast({
+        title: '位置选择成功',
+        icon: 'success',
+        duration: 1500
+      })
+    },
+
+    // 逆地理编码：根据经纬度获取地址信息
+    reverseGeocode(latitude: number, longitude: number) {
+      // 使用高德地图逆地理编码API
+      this.callAmapReverseGeocode(latitude, longitude)
+    },
+
+    // 调用高德地图逆地理编码API
+    callAmapReverseGeocode(latitude: number, longitude: number) {
+      // 高德地图逆地理编码API
+      // 注意：需要在小程序管理后台配置request合法域名：https://restapi.amap.com
+      // 需要配置高德地图key
+      
+      uni.showLoading({
+        title: '正在解析地址...',
+        mask: true
+      })
+      
+      // 高德地图API需要经纬度顺序为：经度,纬度
+      const location = `${longitude},${latitude}`
+      
+      // 从配置文件中获取高德地图key
+      const key = MAP_CONFIG.amapKey
+      
+      if (!key) {
+        uni.hideLoading()
+        uni.showToast({
+          title: '请配置高德地图Key',
+          icon: 'none',
+          duration: 2000
+        })
+        console.warn('高德地图Key未配置，请在manifest.json中配置web.sdkConfigs.maps.amap.key')
+        return
+      }
+      
+      uni.request({
+        url: 'https://restapi.amap.com/v3/geocode/regeo',
+        method: 'GET',
+        data: {
+          location: location,
+          key: key,
+          radius: 1000,
+          extensions: 'base'
+        },
+        success: (res: any) => {
+          console.log('高德地图逆地理编码结果:', res)
+          uni.hideLoading()
+          
+          if (res.data && res.data.status === '1' && res.data.regeocode) {
+            const regeocode = res.data.regeocode
+            this.parseAddressFromAmapGeocode(regeocode)
+            uni.showToast({
+              title: '地址解析成功',
+              icon: 'success',
+              duration: 1500
+            })
+          } else {
+            // API调用失败
+            console.warn('高德地图逆地理编码失败:', res.data)
+            uni.showToast({
+              title: res.data?.info || '地址解析失败，请手动填写',
+              icon: 'none',
+              duration: 2000
+            })
+          }
+        },
+        fail: (err) => {
+          console.error('逆地理编码请求失败:', err)
+          uni.hideLoading()
+          uni.showToast({
+            title: '网络错误，请检查网络',
+            icon: 'none',
+            duration: 2000
+          })
+        }
+      })
+    },
+
+    // 解析高德地图逆地理编码返回的地址信息
+    parseAddressFromAmapGeocode(regeocode: any) {
+      console.log('解析高德地图逆地理编码结果:', regeocode)
+      
+      if (!regeocode) {
+        return
+      }
+
+      // 高德地图逆地理编码返回格式：
+      // {
+      //   formatted_address: "详细地址",
+      //   addressComponent: {
+      //     province: "省",
+      //     city: "市",
+      //     district: "区",
+      //     street: "街道",
+      //     streetNumber: "门牌号",
+      //     township: "乡镇",
+      //     neighborhood: "社区",
+      //     building: "建筑"
+      //   }
+      // }
+      
+      const addressComponent = regeocode.addressComponent
+      if (addressComponent) {
+        // 处理直辖市（北京市、天津市、重庆市、上海市）
+        const province = addressComponent.province || ''
+        let city = addressComponent.city || ''
+        const district = addressComponent.district || ''
+        
+        // 检查是否为直辖市
+        const isMunicipality = province.includes('北京') || province.includes('天津') || 
+                               province.includes('重庆') || province.includes('上海')
+        
+        if (isMunicipality) {
+          // 直辖市：省名 = 市名
+          this.formData.province = province
+          this.formData.city = province  // 市名与省名相同
+          this.formData.district = district
+          
+          // 更新regionValue用于picker显示
+          this.regionValue = [province, province, district]
+        } else {
+          // 普通省份
+          this.formData.province = province
+          this.formData.city = city
+          this.formData.district = district
+          
+          // 更新regionValue用于picker显示（使用完整名称）
+          this.regionValue = [province, city, district]
+        }
+        
+        // 设置详细地址
+        let detailAddress = ''
+        if (regeocode.formatted_address) {
+          detailAddress = regeocode.formatted_address
+          
+          // 去除省市区前缀，只保留详细地址部分
+          const province = this.formData.province || ''
+          const city = this.formData.city || ''
+          const district = this.formData.district || ''
+          
+          // 去除省市区前缀
+          let cleanAddress = detailAddress
+          if (province && cleanAddress.startsWith(province)) {
+            cleanAddress = cleanAddress.substring(province.length)
+          }
+          if (city && cleanAddress.startsWith(city)) {
+            cleanAddress = cleanAddress.substring(city.length)
+          }
+          if (district && cleanAddress.startsWith(district)) {
+            cleanAddress = cleanAddress.substring(district.length)
+          }
+          
+          // 去除可能的空格和分隔符
+          cleanAddress = cleanAddress.trim()
+          
+          // 如果去除前缀后还有内容，使用去除前缀后的地址；否则使用完整地址
+          if (cleanAddress && cleanAddress.length > 0) {
+            this.formData.detailAddress = cleanAddress
+          } else {
+            // 如果去除前缀后为空，尝试从addressComponent拼接详细地址
+            const parts: string[] = []
+            if (addressComponent.township) {
+              parts.push(addressComponent.township)
+            }
+            if (addressComponent.street) {
+              parts.push(addressComponent.street)
+            }
+            if (addressComponent.streetNumber) {
+              parts.push(addressComponent.streetNumber)
+            }
+            if (addressComponent.building) {
+              parts.push(addressComponent.building)
+            }
+            if (addressComponent.neighborhood) {
+              parts.push(addressComponent.neighborhood)
+            }
+            this.formData.detailAddress = parts.length > 0 ? parts.join('') : detailAddress
+          }
+        } else {
+          // 如果没有formatted_address，从addressComponent拼接详细地址
+          const parts: string[] = []
+          if (addressComponent.township) {
+            parts.push(addressComponent.township)
+          }
+          if (addressComponent.street) {
+            parts.push(addressComponent.street)
+          }
+          if (addressComponent.streetNumber) {
+            parts.push(addressComponent.streetNumber)
+          }
+          if (addressComponent.building) {
+            parts.push(addressComponent.building)
+          }
+          if (addressComponent.neighborhood) {
+            parts.push(addressComponent.neighborhood)
+          }
+          this.formData.detailAddress = parts.join('')
+        }
+      } else if (regeocode.formatted_address) {
+        // 如果没有addressComponent，但有formatted_address，尝试解析
+        this.parseAddressFromLocation({ address: regeocode.formatted_address })
+      }
+    },
+
+
+    parseAddressFromLocation(locationRes: any) {
+      if (!locationRes.address) {
+        return
+      }
+
+      const address = locationRes.address
+      console.log('解析地址:', address)
+
+      // 使用正则表达式解析省市区
+      // 匹配格式：省/市/自治区/特别行政区 + 市/地区/自治州/盟 + 区/县/市/旗 + 详细地址
+      const fullMatch = address.match(/^(.+?[省市区县]|.+?自治区|.+?特别行政区)(.+?[市区县]|.+?地区|.+?自治州|.+?盟)?(.+?[区县市]|.+?旗)?(.*)$/)
+      
+      if (fullMatch) {
+        const province = fullMatch[1] || ''
+        const city = fullMatch[2] || ''
+        const district = fullMatch[3] || ''
+        let detailAddress = fullMatch[4] || ''
+
+        // 处理直辖市（北京、上海、天津、重庆）
+        if (province && (province.includes('北京') || province.includes('上海') || 
+            province.includes('天津') || province.includes('重庆'))) {
+          // 直辖市：省名 = 市名
+          this.formData.province = province
+          this.formData.city = province
+          
+          // 提取区
+          if (district) {
+            this.formData.district = district
+            this.regionValue = [province, province, district]
+          } else if (city && city !== province) {
+            // 如果city不是省名，可能是区名
+            this.formData.district = city
+            this.regionValue = [province, province, city]
+            detailAddress = city + detailAddress
+          } else {
+            this.regionValue = [province, province, '']
+          }
+        } else {
+          // 普通省份
+          if (province) {
+            this.formData.province = province
+          }
+          if (city) {
+            this.formData.city = city
+          }
+          if (district) {
+            this.formData.district = district
+          }
+          
+          // 更新regionValue用于picker显示
+          this.regionValue = [
+            this.formData.province || '',
+            this.formData.city || '',
+            this.formData.district || ''
+          ]
+        }
+
+        // 设置详细地址
+        detailAddress = detailAddress.trim()
+        if (detailAddress) {
+          // 如果详细地址为空或需要更新，则设置
+          if (!this.formData.detailAddress || this.formData.detailAddress === address) {
+            this.formData.detailAddress = detailAddress
+          }
+        } else if (locationRes.name) {
+          // 如果没有详细地址，使用位置名称
+          this.formData.detailAddress = locationRes.name
+        }
+      } else {
+        // 如果正则匹配失败，尝试简单分割
+        // 使用空格或特定字符分割
+        const parts = address.split(/[\s省市区县]/)
+        if (parts.length >= 3) {
+          const provinceName = parts[0] + (address.includes('省') ? '省' : 
+                                            address.includes('市') && !address.includes('省') ? '市' : '')
+          
+          // 检查是否为直辖市
+          const isMunicipality = provinceName.includes('北京') || provinceName.includes('天津') || 
+                                 provinceName.includes('重庆') || provinceName.includes('上海')
+          
+          if (isMunicipality) {
+            // 直辖市：省名 = 市名
+            this.formData.province = provinceName
+            this.formData.city = provinceName
+            this.formData.district = parts[2] + (address.includes('区') ? '区' : 
+                                                 address.includes('县') ? '县' : '')
+            this.regionValue = [provinceName, provinceName, this.formData.district]
+          } else {
+            // 普通省份
+            this.formData.province = provinceName
+            this.formData.city = parts[1] + '市'
+            this.formData.district = parts[2] + (address.includes('区') ? '区' : 
+                                                   address.includes('县') ? '县' : '')
+            this.regionValue = [this.formData.province, this.formData.city, this.formData.district]
+          }
+          
+          // 剩余部分作为详细地址
+          const detailStart = this.formData.province.length + this.formData.city.length + this.formData.district.length
+          const remaining = address.substring(detailStart).trim()
+          if (remaining && !this.formData.detailAddress) {
+            this.formData.detailAddress = remaining
+          }
+        } else {
+          // 如果无法解析，至少填充详细地址
+          if (!this.formData.detailAddress) {
+            this.formData.detailAddress = address
+          }
+        }
+      }
+
+      // 如果位置名称存在且详细地址为空，使用位置名称
+      if (locationRes.name && !this.formData.detailAddress) {
+        this.formData.detailAddress = locationRes.name
+      }
+    },
+
+    async handleSave() {
+      // 验证表单
+      if (!this.formData.contactName) {
+        uni.showToast({
+          title: '请输入联系人姓名',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (!this.formData.contactPhone || this.formData.contactPhone.length !== 11) {
+        uni.showToast({
+          title: '请输入正确的联系电话',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (!this.formData.province || !this.formData.city || !this.formData.district) {
+        uni.showToast({
+          title: '请选择所在地区',
+          icon: 'none'
+        })
+        return
+      }
+
+      if (!this.formData.detailAddress) {
+        uni.showToast({
+          title: '请输入详细地址',
+          icon: 'none'
+        })
+        return
+      }
+
+      this.loading = true
+      try {
+        // 确保所有字段都是正确的类型，避免数组类型错误
+        const addressData = {
+          contactName: String(this.formData.contactName || ''),
+          contactPhone: String(this.formData.contactPhone || ''),
+          province: String(this.formData.province || ''),
+          city: String(this.formData.city || ''),
+          district: String(this.formData.district || ''),
+          detailAddress: String(this.formData.detailAddress || ''),
+          longitude: this.formData.longitude ? String(this.formData.longitude) : undefined,
+          latitude: this.formData.latitude ? String(this.formData.latitude) : undefined,
+          isDefault: this.formData.isDefault || 0
+        }
+        
+        if (this.isEdit) {
+          await updateAddress(this.addressId, addressData)
+        } else {
+          await addAddress(addressData)
+        }
+
+        uni.showToast({
+          title: '保存成功',
+          icon: 'success'
+        })
+
+        setTimeout(() => {
+          // 检查页面栈，如果可以返回则返回，否则跳转到地址列表
+          const pages = getCurrentPages()
+          if (pages.length > 1) {
+            uni.navigateBack()
+          } else {
+            uni.redirectTo({
+              url: '/subpkg/address-list'
+            })
+          }
+        }, 1500)
+      } catch (error: any) {
+        console.error('保存地址失败:', error)
+        let errorMsg = '保存失败，请重试'
+        if (error && typeof error === 'object') {
+          if (error.message) {
+            errorMsg = error.message
+          } else if (error.errMsg) {
+            errorMsg = error.errMsg
+          } else if (error.data && error.data.message) {
+            errorMsg = error.data.message
+          }
+        } else if (typeof error === 'string') {
+          errorMsg = error
+        }
+        uni.showToast({
+          title: errorMsg,
+          icon: 'none',
+          duration: 2000
+        })
+      } finally {
+        this.loading = false
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+.address-edit-container {
+  min-height: 100vh;
+  background: #f9fafb;
+  padding-bottom: 40rpx;
+  box-sizing: border-box;
+}
+
+/* 头部背景 */
+.header-bg {
+  position: relative;
+  height: 280rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(37, 99, 235, 0.15);
+}
+
+.wave {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 200%;
+  height: 100rpx;
+  background: #f9fafb;
+  border-radius: 50% 50% 0 0;
+  transform: translateX(-25%);
+}
+
+/* 导航栏 */
+.navbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  z-index: 10;
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10rpx);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  flex-shrink: 0;
+  z-index: 11;
+}
+
+.back-btn:active {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(0.95);
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 1rpx;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.placeholder {
+  width: 64rpx;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* 表单内容 */
+.form-content {
+  padding: 0 30rpx;
+  margin-top: 20rpx;
+}
+
+.form-group {
+  background: #ffffff;
+  border-radius: 24rpx;
+  overflow: hidden;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  border: 1rpx solid rgba(37, 99, 235, 0.08);
+  margin-bottom: 24rpx;
+}
+
+.form-group-switch {
+  margin-bottom: 0;
+}
+
+.form-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 36rpx 30rpx;
+  border-bottom: 1rpx solid #f3f4f6;
+  min-height: 100rpx;
+  box-sizing: border-box;
+  transition: background 0.3s;
+  gap: 20rpx;
+}
+
+.form-item:active {
+  background: #f9fafb;
+}
+
+.form-item:last-child {
+  border-bottom: none;
+}
+
+.form-item-textarea {
+  align-items: flex-start;
+  padding-top: 36rpx;
+  padding-bottom: 36rpx;
+  min-height: auto;
+}
+
+.form-item-switch {
+  border-bottom: none;
+}
+
+.form-label-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 180rpx;
+  max-width: 200rpx;
+}
+
+.form-label-wrapper-textarea {
+  align-items: flex-start;
+  padding-top: 8rpx;
+}
+
+.form-label-wrapper-switch {
+  min-width: auto;
+  max-width: none;
+  flex: 1;
+}
+
+.form-label-icon {
+  font-size: 36rpx;
+  margin-right: 16rpx;
+  flex-shrink: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  width: 36rpx;
+  text-align: center;
+}
+
+.form-label {
+  font-size: 32rpx;
+  color: #1f2937;
+  font-weight: 500;
+  flex: 1;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.form-label-switch {
+  overflow: visible;
+  text-overflow: clip;
+  flex: none;
+}
+
+.form-input {
+  flex: 1;
+  font-size: 32rpx;
+  color: #1f2937;
+  text-align: right;
+  min-width: 0;
+  padding: 0;
+  overflow: visible;
+}
+
+.form-value-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.form-value {
+  font-size: 32rpx;
+  color: #1f2937;
+  margin-right: 16rpx;
+  text-align: right;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.form-value.placeholder-text {
+  color: #9ca3af;
+}
+
+.form-arrow {
+  font-size: 48rpx;
+  color: #9ca3af;
+  flex-shrink: 0;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  margin-left: 0;
+}
+
+.form-textarea {
+  flex: 1;
+  font-size: 32rpx;
+  color: #1f2937;
+  min-width: 0;
+  min-height: 120rpx;
+  padding: 0;
+  line-height: 1.6;
+  text-align: left;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  word-break: break-all;
+}
+
+/* 保存按钮 */
+.save-section {
+  padding: 40rpx 30rpx 0;
+}
+
+.save-btn {
+  width: 100%;
+  height: 100rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-radius: 50rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 24rpx rgba(37, 99, 235, 0.3);
+  transition: all 0.3s;
+  padding: 0;
+  margin: 0;
+}
+
+.save-btn::after {
+  border: none;
+}
+
+.save-btn:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+.save-btn[disabled] {
+  opacity: 0.6;
+}
+
+.btn-text {
+  font-size: 32rpx;
+  color: #ffffff;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+}
+</style>

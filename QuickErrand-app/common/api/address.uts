@@ -1,0 +1,78 @@
+/**
+ * 地址相关API
+ */
+import { post, get, del, put } from '../utils/request.uts'
+
+/**
+ * 地址参数
+ */
+export type AddressParams = {
+  contactName: string
+  contactPhone: string
+  province: string
+  city: string
+  district: string
+  detailAddress: string
+  longitude?: string
+  latitude?: string
+  isDefault?: number
+}
+
+/**
+ * 地址信息
+ */
+export type AddressInfo = {
+  id: number
+  contactName: string
+  contactPhone: string
+  province: string
+  city: string
+  district: string
+  detailAddress: string
+  longitude: string
+  latitude: string
+  isDefault: number
+  createTime: string
+}
+
+/**
+ * 获取地址列表
+ */
+export const getAddressList = () : Promise<AddressInfo[]> => {
+  return get<AddressInfo[]>('/address/list')
+}
+
+/**
+ * 获取地址详情
+ */
+export const getAddressDetail = (id : number) : Promise<AddressInfo> => {
+  return get<AddressInfo>(`/address/${id}`)
+}
+
+/**
+ * 添加地址
+ */
+export const addAddress = (data : AddressParams) : Promise<number> => {
+  return post<number>('/address', data)
+}
+
+/**
+ * 更新地址
+ */
+export const updateAddress = (id : number, data : AddressParams) : Promise<any> => {
+  return put(`/address/${id}`, data)
+}
+
+/**
+ * 删除地址
+ */
+export const deleteAddress = (id : number) : Promise<any> => {
+  return del(`/address/${id}`)
+}
+
+/**
+ * 设置默认地址
+ */
+export const setDefaultAddress = (id : number) : Promise<any> => {
+  return put(`/address/${id}/default`)
+}

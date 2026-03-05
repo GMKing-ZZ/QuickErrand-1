@@ -1,0 +1,58 @@
+{
+  "light": {
+    "navigationBarTextStyle": "white",
+    "navigationBarBackgroundColor": "#2563eb",
+    "backgroundColorContent": "#f9fafb",
+    "tabBarPagebackgroundColorContent": "#f9fafb",
+    "backgroundColor": "#f9fafb",
+    "backgroundTextStyle": "dark",
+
+    "tabBarColor": "#9ca3af",
+    "tabBarSelectedColor": "#2563eb",
+    "tabBarBorderStyle": "black",
+    "tabBarBackgroundColor": "#ffffff",
+
+    "tabBarComponentIconPath": "static/component.png",
+    "tabBarComponentSelectedIconPath": "static/componentHL.png",
+    "tabBarAPIIconPath": "static/api.png",
+    "tabBarAPISelectedIconPath": "static/apiHL.png",
+    "tabBarCSSIconPath": "static/css.png",
+    "tabBarCSSSelectedIconPath": "static/cssHL.png",
+    "tabBarTemplateIconPath": "static/template.png",
+    "tabBarTemplateSelectedIconPath": "static/templateHL.png",
+    "tabBarHomeIconPath": "static/tabbar-home.png",
+    "tabBarHomeSelectedIconPath": "static/tabbar-home-active.png",
+    "tabBarOrderIconPath": "static/tabbar-order.png",
+    "tabBarOrderSelectedIconPath": "static/tabbar-order-active.png",
+    "tabBarMineIconPath": "static/tabbar-mine.png",
+    "tabBarMineSelectedIconPath": "static/tabbar-mine-active.png"
+  },
+  "dark": {
+    "navigationBarTextStyle": "white",
+    "navigationBarBackgroundColor": "#1F1F1F",
+    "backgroundColor": "#1F1F1F",
+    "backgroundColorContent": "#646464",
+    "tabBarPagebackgroundColorContent": "#1F1F1F",
+    "backgroundTextStyle": "light",
+
+    "tabBarColor": "#cacaca",
+    "tabBarSelectedColor": "#007AFF",
+    "tabBarBorderStyle": "white",
+    "tabBarBackgroundColor": "#1F1F1F",
+
+    "tabBarComponentIconPath": "static/component.png",
+    "tabBarComponentSelectedIconPath": "static/componentHL.png",
+    "tabBarAPIIconPath": "static/api.png",
+    "tabBarAPISelectedIconPath": "static/apiHL.png",
+    "tabBarCSSIconPath": "static/css.png",
+    "tabBarCSSSelectedIconPath": "static/cssHL.png",
+    "tabBarTemplateIconPath": "static/template.png",
+    "tabBarTemplateSelectedIconPath": "static/templateHL.png",
+    "tabBarHomeIconPath": "static/tabbar-home.png",
+    "tabBarHomeSelectedIconPath": "static/tabbar-home-active.png",
+    "tabBarOrderIconPath": "static/tabbar-order.png",
+    "tabBarOrderSelectedIconPath": "static/tabbar-order-active.png",
+    "tabBarMineIconPath": "static/tabbar-mine.png",
+    "tabBarMineSelectedIconPath": "static/tabbar-mine-active.png"
+  }
+}

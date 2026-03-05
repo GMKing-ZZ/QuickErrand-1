@@ -1,0 +1,676 @@
+<template>
+  <view class="active-orders-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">←</text>
+      </view>
+      <text class="nav-title">进行中订单</text>
+      <view class="refresh-btn" @click="loadOrders">
+        <text class="refresh-icon">↻</text>
+      </view>
+    </view>
+
+    <!-- 加载中 -->
+    <view v-if="loading" class="loading-wrapper">
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <!-- 空状态 -->
+    <view v-else-if="orders.length === 0" class="empty-wrapper">
+      <text class="empty-icon">📦</text>
+      <text class="empty-text">暂无进行中订单</text>
+    </view>
+
+    <!-- 订单列表 -->
+    <view v-else class="orders-list">
+      <view
+        v-for="order in orders"
+        :key="order.id"
+        class="order-card"
+      >
+        <!-- 订单头部 -->
+        <view class="order-header">
+          <view class="order-type">
+            <text class="type-icon">📋</text>
+            <text class="type-name">{{ order.orderTypeName }}</text>
+          </view>
+          <view class="order-status" :class="getStatusClass(order.status)">
+            <text class="status-text">{{ order.statusText }}</text>
+          </view>
+        </view>
+
+        <!-- 地址信息 -->
+        <view class="address-section">
+          <view class="address-item">
+            <text class="address-icon">📍</text>
+            <view class="address-info">
+              <text class="address-label">取件地址</text>
+              <text class="address-text">{{ order.pickupAddress }}</text>
+              <text class="contact-text">{{ order.pickupContact }} {{ order.pickupPhone }}</text>
+            </view>
+            <view class="call-btn" @click="makeCall(order.pickupPhone)">
+              <text class="call-icon">📞</text>
+            </view>
+          </view>
+
+          <view class="address-divider">
+            <text class="divider-icon">↓</text>
+          </view>
+
+          <view class="address-item">
+            <text class="address-icon">🎯</text>
+            <view class="address-info">
+              <text class="address-label">送达地址</text>
+              <text class="address-text">{{ order.deliveryAddress }}</text>
+              <text class="contact-text">{{ order.deliveryContact }} {{ order.deliveryPhone }}</text>
+            </view>
+            <view class="call-btn" @click="makeCall(order.deliveryPhone)">
+              <text class="call-icon">📞</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 订单信息 -->
+        <view class="order-info">
+          <view class="info-item">
+            <text class="info-label">订单编号</text>
+            <text class="info-value">{{ order.orderNo }}</text>
+          </view>
+          <view class="info-item">
+            <text class="info-label">订单金额</text>
+            <text class="info-value amount">¥{{ order.amount }}</text>
+          </view>
+          <view class="info-item" v-if="order.distance">
+            <text class="info-label">配送距离</text>
+            <text class="info-value">{{ order.distance }}km</text>
+          </view>
+        </view>
+
+        <!-- 备注 -->
+        <view v-if="order.remark" class="remark-section">
+          <text class="remark-label">备注：</text>
+          <text class="remark-text">{{ order.remark }}</text>
+        </view>
+
+        <!-- 操作按钮 -->
+        <view class="action-section">
+          <!-- 待取件状态 -->
+          <view v-if="order.status === 2" class="action-buttons">
+            <button class="nav-btn" @click="openNavigation(order)">
+              <text class="btn-text">📍 导航</text>
+            </button>
+            <button class="pickup-btn" @click="handlePickup(order)">
+              <text class="btn-text">已取件</text>
+            </button>
+          </view>
+
+          <!-- 配送中状态 -->
+          <view v-if="order.status === 3" class="action-buttons">
+            <button class="nav-btn" @click="openNavigation(order)">
+              <text class="btn-text">📍 导航</text>
+            </button>
+            <button class="complete-btn" @click="showCompleteDialog(order)">
+              <text class="btn-text">完成订单</text>
+            </button>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 完成订单对话框 -->
+    <view v-if="showDialog" class="dialog-mask" @click="closeDialog">
+      <view class="dialog-content" @click.stop>
+        <text class="dialog-title">输入收货码</text>
+        <input
+          class="code-input"
+          v-model="pickupCode"
+          placeholder="请输入6位收货码"
+          maxlength="6"
+          type="number"
+        />
+        <view class="dialog-buttons">
+          <button class="cancel-btn" @click="closeDialog">
+            <text class="btn-text">取消</text>
+          </button>
+          <button class="confirm-btn" @click="confirmComplete" :loading="completing">
+            <text class="btn-text">确认</text>
+          </button>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getActiveOrders, pickupOrder, completeOrder } from '@/common/api/runner.uts'
+import { userState } from '@/store/user.uts'
+
+export default {
+  data() {
+    return {
+      loading: true,
+      orders: [] as any[],
+      showDialog: false,
+      pickupCode: '',
+      currentOrder: null as any,
+      completing: false
+    }
+  },
+  onLoad() {
+    this.checkRunnerAccessAndLoad()
+  },
+  onShow() {
+    // 页面显示时刷新列表
+    this.checkRunnerAccessAndLoad()
+  },
+  methods: {
+    goBack() {
+      uni.navigateBack()
+    },
+
+    checkRunnerAccessAndLoad() {
+      const info: any = userState.userInfo
+      if (!info || info.userType !== 2) {
+        uni.showModal({
+          title: '提示',
+          content: '当前账号不是跑腿员，无法查看跑腿员订单',
+          showCancel: false,
+          success: () => {
+            uni.navigateBack()
+          }
+        })
+        return
+      }
+      this.loadOrders()
+    },
+
+    async loadOrders() {
+      this.loading = true
+      try {
+        this.orders = await getActiveOrders()
+      } catch (error) {
+        console.error('获取进行中订单失败:', error)
+        uni.showToast({
+          title: '加载失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    getStatusClass(status: number): string {
+      if (status === 2) return 'status-pickup'
+      if (status === 3) return 'status-delivery'
+      return ''
+    },
+
+    makeCall(phone: string) {
+      uni.makePhoneCall({
+        phoneNumber: phone
+      })
+    },
+
+    openNavigation(order: any) {
+      // 根据订单状态决定导航目的地
+      const latitude = order.status === 2 ? order.pickupLatitude : order.deliveryLatitude
+      const longitude = order.status === 2 ? order.pickupLongitude : order.deliveryLongitude
+      const address = order.status === 2 ? order.pickupAddress : order.deliveryAddress
+
+      if (!latitude || !longitude) {
+        uni.showToast({
+          title: '地址信息不完整',
+          icon: 'none'
+        })
+        return
+      }
+
+      // 打开地图导航
+      uni.openLocation({
+        latitude: parseFloat(latitude),
+        longitude: parseFloat(longitude),
+        name: address,
+        address: address,
+        scale: 15
+      })
+    },
+
+    async handlePickup(order: any) {
+      uni.showModal({
+        title: '确认取件',
+        content: '确认已取到物品？',
+        success: async (res) => {
+          if (res.confirm) {
+            try {
+              await pickupOrder(order.id)
+              uni.showToast({
+                title: '取件成功',
+                icon: 'success'
+              })
+              // 刷新列表
+              this.loadOrders()
+            } catch (error) {
+              console.error('取件失败:', error)
+              uni.showToast({
+                title: '操作失败，请重试',
+                icon: 'none'
+              })
+            }
+          }
+        }
+      })
+    },
+
+    showCompleteDialog(order: any) {
+      this.currentOrder = order
+      this.pickupCode = ''
+      this.showDialog = true
+    },
+
+    closeDialog() {
+      this.showDialog = false
+      this.pickupCode = ''
+      this.currentOrder = null
+    },
+
+    async confirmComplete() {
+      if (!this.pickupCode || this.pickupCode.length !== 6) {
+        uni.showToast({
+          title: '请输入6位收货码',
+          icon: 'none'
+        })
+        return
+      }
+
+      this.completing = true
+      try {
+        await completeOrder(this.currentOrder.id, this.pickupCode)
+        uni.showToast({
+          title: '订单完成',
+          icon: 'success'
+        })
+        this.closeDialog()
+        // 刷新列表
+        this.loadOrders()
+      } catch (error) {
+        console.error('完成订单失败:', error)
+        uni.showToast({
+          title: '收货码错误或操作失败',
+          icon: 'none'
+        })
+      } finally {
+        this.completing = false
+      }
+    }
+  }
+}
+</script>
+
+<style scoped>
+.active-orders-container {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+/* 导航栏 */
+.navbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 60rpx 30rpx 30rpx;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.back-btn,
+.refresh-btn {
+  width: 80rpx;
+  height: 80rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-icon,
+.refresh-icon {
+  font-size: 40rpx;
+  color: #ffffff;
+}
+
+.nav-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+/* 加载中 */
+.loading-wrapper {
+  padding: 200rpx 0;
+  display: flex;
+  justify-content: center;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 空状态 */
+.empty-wrapper {
+  padding: 200rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30rpx;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 订单列表 */
+.orders-list {
+  padding: 30rpx;
+}
+
+.order-card {
+  margin-bottom: 30rpx;
+  padding: 30rpx;
+  background: #ffffff;
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.05);
+}
+
+/* 订单头部 */
+.order-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+  padding-bottom: 20rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.order-type {
+  display: flex;
+  align-items: center;
+  gap: 15rpx;
+}
+
+.type-icon {
+  font-size: 36rpx;
+}
+
+.type-name {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333333;
+}
+
+.order-status {
+  padding: 10rpx 20rpx;
+  border-radius: 30rpx;
+  font-size: 24rpx;
+}
+
+.status-pickup {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-delivery {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.status-text {
+  font-weight: bold;
+}
+
+/* 地址信息 */
+.address-section {
+  margin-bottom: 30rpx;
+}
+
+.address-item {
+  display: flex;
+  gap: 20rpx;
+  margin-bottom: 20rpx;
+  align-items: flex-start;
+}
+
+.address-icon {
+  font-size: 36rpx;
+  line-height: 1;
+}
+
+.address-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.address-label {
+  font-size: 24rpx;
+  color: #999999;
+}
+
+.address-text {
+  font-size: 28rpx;
+  color: #333333;
+  line-height: 1.6;
+}
+
+.contact-text {
+  font-size: 26rpx;
+  color: #666666;
+}
+
+.call-btn {
+  width: 70rpx;
+  height: 70rpx;
+  background: #4facfe;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.call-icon {
+  font-size: 32rpx;
+}
+
+.address-divider {
+  display: flex;
+  justify-content: center;
+  margin: 10rpx 0;
+}
+
+.divider-icon {
+  font-size: 32rpx;
+  color: #cccccc;
+}
+
+/* 订单信息 */
+.order-info {
+  margin-bottom: 20rpx;
+  padding: 20rpx;
+  background: #f8f9fa;
+  border-radius: 15rpx;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10rpx 0;
+}
+
+.info-label {
+  font-size: 26rpx;
+  color: #666666;
+}
+
+.info-value {
+  font-size: 26rpx;
+  color: #333333;
+}
+
+.info-value.amount {
+  color: #ff6b6b;
+  font-weight: bold;
+  font-size: 28rpx;
+}
+
+/* 备注 */
+.remark-section {
+  margin-bottom: 20rpx;
+  padding: 20rpx;
+  background: #fff3cd;
+  border-radius: 15rpx;
+}
+
+.remark-label {
+  font-size: 26rpx;
+  color: #856404;
+  font-weight: bold;
+}
+
+.remark-text {
+  font-size: 26rpx;
+  color: #856404;
+  line-height: 1.6;
+}
+
+/* 操作按钮 */
+.action-section {
+  margin-top: 20rpx;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 20rpx;
+}
+
+.nav-btn,
+.pickup-btn,
+.complete-btn {
+  flex: 1;
+  height: 80rpx;
+  border-radius: 40rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-btn {
+  background: #f8f9fa;
+  border: 2rpx solid #4facfe;
+}
+
+.nav-btn .btn-text {
+  color: #4facfe;
+}
+
+.pickup-btn {
+  background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+}
+
+.complete-btn {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.pickup-btn .btn-text,
+.complete-btn .btn-text {
+  color: #ffffff;
+}
+
+.btn-text {
+  font-size: 28rpx;
+  font-weight: bold;
+}
+
+/* 对话框 */
+.dialog-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.dialog-content {
+  width: 600rpx;
+  padding: 40rpx;
+  background: #ffffff;
+  border-radius: 20rpx;
+}
+
+.dialog-title {
+  display: block;
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333333;
+  text-align: center;
+  margin-bottom: 30rpx;
+}
+
+.code-input {
+  width: 100%;
+  height: 90rpx;
+  padding: 0 30rpx;
+  font-size: 32rpx;
+  color: #333333;
+  background: #f5f5f5;
+  border-radius: 15rpx;
+  text-align: center;
+  letter-spacing: 10rpx;
+  margin-bottom: 30rpx;
+}
+
+.dialog-buttons {
+  display: flex;
+  gap: 20rpx;
+}
+
+.cancel-btn,
+.confirm-btn {
+  flex: 1;
+  height: 80rpx;
+  border-radius: 40rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cancel-btn {
+  background: #f5f5f5;
+}
+
+.cancel-btn .btn-text {
+  color: #666666;
+}
+
+.confirm-btn {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.confirm-btn .btn-text {
+  color: #ffffff;
+}
+</style>

@@ -1,0 +1,260 @@
+<template>
+  <view class="earnings-details-container">
+    <!-- 导航栏 -->
+    <view class="navbar">
+      <view class="back-btn" @click="goBack">
+        <text class="back-icon">←</text>
+      </view>
+      <text class="nav-title">收益明细</text>
+      <view class="placeholder"></view>
+    </view>
+
+    <!-- 加载中 -->
+    <view v-if="loading" class="loading-wrapper">
+      <text class="loading-text">加载中...</text>
+    </view>
+
+    <!-- 空状态 -->
+    <view v-else-if="details.length === 0" class="empty-wrapper">
+      <text class="empty-icon">💰</text>
+      <text class="empty-text">暂无收益记录</text>
+    </view>
+
+    <!-- 收益明细列表（表格样式） -->
+    <view v-else class="details-list">
+      <view
+        v-for="(detail, index) in details"
+        :key="detail.id"
+        class="detail-row"
+      >
+        <!-- 序号 -->
+        <text class="col-index">{{ formatIndex(index) }}</text>
+
+        <!-- 收益类型 -->
+        <view class="col-type">
+          <text class="type-text">{{ detail.typeText }}</text>
+          <text class="time-text">{{ formatTime(detail.createTime) }}</text>
+        </view>
+
+        <!-- 金额 -->
+        <view class="col-amount">
+          <text class="amount" :class="getAmountClass(detail.type)">
+            {{ detail.type === 3 ? '-' : '+' }}¥{{ Math.abs(detail.amount) }}
+          </text>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { getEarningsDetails } from '@/common/api/runner.uts'
+import { formatDateTime } from '@/common/utils/common.uts'
+
+export default {
+  data() {
+    return {
+      loading: true,
+      details: [] as any[]
+    }
+  },
+  onLoad() {
+    this.loadDetails()
+  },
+  methods: {
+    formatTime(time: string | null | undefined): string {
+      if (!time) return ''
+      return formatDateTime(time)
+    },
+    goBack() {
+      uni.navigateBack()
+    },
+
+    async loadDetails() {
+      this.loading = true
+      try {
+        this.details = await getEarningsDetails()
+      } catch (error) {
+        console.error('获取收益明细失败:', error)
+        uni.showToast({
+          title: '加载失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    getTypeIcon(type: number): string {
+      switch (type) {
+        case 1:
+          return '📦'
+        case 2:
+          return '🎁'
+        case 3:
+          return '💸'
+        default:
+          return '💰'
+      }
+    },
+
+    getAmountClass(type: number): string {
+      return type === 3 ? 'negative' : 'positive'
+    },
+
+    getStatusClass(status: number): string {
+      return status === 1 ? 'status-pending' : 'status-settled'
+    },
+
+    // 列表序号格式化：01、02...
+    formatIndex(index: number): string {
+      const num = index + 1
+      return num < 10 ? `0${num}` : `${num}`
+    }
+  }
+}
+</script>
+
+<style scoped>
+.earnings-details-container {
+  min-height: 100vh;
+  background: #f9fafb;
+}
+
+/* 导航栏 */
+.navbar {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 60rpx 30rpx 20rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+}
+
+.back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.back-icon {
+  font-size: 48rpx;
+  color: #ffffff;
+}
+
+.nav-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.placeholder {
+  width: 64rpx;
+}
+
+/* 加载中 */
+.loading-wrapper {
+  padding: 200rpx 0;
+  display: flex;
+  justify-content: center;
+}
+
+.loading-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 空状态 */
+.empty-wrapper {
+  padding: 200rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 30rpx;
+}
+
+.empty-icon {
+  font-size: 120rpx;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #999999;
+}
+
+/* 明细列表 */
+.details-list {
+  padding: 30rpx;
+}
+
+.detail-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 26rpx 30rpx;
+  background: #ffffff;
+  border-radius: 0;
+  border-bottom: 1rpx solid #f1f1f5;
+}
+
+.detail-row:last-child {
+  border-bottom-width: 0;
+}
+
+.col-index {
+  width: 80rpx;
+  font-size: 26rpx;
+  color: #9ca3af;
+}
+
+.col-type {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.type-text {
+  font-size: 28rpx;
+  color: #374151;
+}
+
+.time-text {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #9ca3af;
+}
+
+.col-amount {
+  min-width: 160rpx;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.amount {
+  font-size: 30rpx;
+  font-weight: bold;
+}
+
+.amount.positive {
+  color: #2563eb;
+}
+
+.amount.negative {
+  color: #f97373;
+}
+
+.status-text,
+.status-pending,
+.status-settled {
+  display: none;
+}
+</style>

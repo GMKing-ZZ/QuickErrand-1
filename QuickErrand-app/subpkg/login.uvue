@@ -1,0 +1,866 @@
+<template>
+  <view class="login-container">
+    <!-- 背景装饰 -->
+    <view class="bg-decoration">
+      <view class="circle circle-1"></view>
+      <view class="circle circle-2"></view>
+      <view class="circle circle-3"></view>
+    </view>
+
+    <!-- 主内容 -->
+    <view class="content">
+      <!-- Logo区域 -->
+      <view class="logo-section">
+        <image class="logo" src="/static/logo.png" mode="aspectFit"></image>
+        <text class="app-name">跑腿小程序</text>
+        <text class="slogan">您身边的跑腿助手</text>
+      </view>
+
+      <!-- 登录表单 -->
+      <view class="form-card">
+        <view class="tab-bar">
+          <view
+            class="tab-item"
+            :class="{ active: loginType === 'password' }"
+            @click="switchLoginType('password')"
+          >
+            <text class="tab-text">密码登录</text>
+          </view>
+          <view
+            class="tab-item"
+            :class="{ active: loginType === 'wechat' }"
+            @click="switchLoginType('wechat')"
+          >
+            <text class="tab-text">微信登录</text>
+          </view>
+        </view>
+
+        <!-- 密码登录表单 -->
+        <view v-if="loginType === 'password'" class="form-content">
+          <view class="input-group">
+            <view class="input-wrapper">
+              <text class="input-icon">📱</text>
+              <input
+                class="input-field"
+                type="number"
+                v-model="phone"
+                placeholder="请输入手机号"
+                maxlength="11"
+              />
+            </view>
+          </view>
+
+          <view class="input-group">
+            <view class="input-wrapper">
+              <text class="input-icon">🔒</text>
+              <input
+                class="input-field"
+                type="text"
+                :password="!showPassword"
+                v-model="password"
+                placeholder="请输入密码"
+              />
+              <text class="toggle-password" @click="togglePassword">
+                {{ showPassword ? '👁️' : '👁️‍🗨️' }}
+              </text>
+            </view>
+          </view>
+
+          <view class="action-row">
+            <text class="link-text" @click="goToRegister">立即注册</text>
+            <text class="link-text" @click="goToForgotPassword">忘记密码？</text>
+          </view>
+
+          <button class="login-btn" @click="handleLogin" :loading="loading">
+            <text class="btn-text">登录</text>
+          </button>
+        </view>
+
+        <!-- 微信登录 -->
+        <view v-else class="wechat-login">
+          <view class="wechat-icon-wrapper">
+            <text class="wechat-icon">💬</text>
+          </view>
+          <text class="wechat-tip">选择登录身份，使用微信一键登录</text>
+          
+          <view class="wx-user-type-wrapper">
+            <view 
+              class="wx-type-item"
+              :class="{ active: wxUserType === 1 }"
+              @click="wxUserType = 1"
+            >
+              <text class="wx-type-icon">👤</text>
+              <text class="wx-type-text">用户登录</text>
+            </view>
+            <view 
+              class="wx-type-item runner"
+              :class="{ active: wxUserType === 2 }"
+              @click="wxUserType = 2"
+            >
+              <text class="wx-type-icon">🏃</text>
+              <text class="wx-type-text">跑腿员登录</text>
+            </view>
+          </view>
+          
+          <button class="wechat-btn" @click="handleWxLogin" :loading="loading">
+            <text class="btn-text">微信一键登录</text>
+          </button>
+        </view>
+      </view>
+
+      <!-- 底部提示 -->
+      <view class="footer">
+        <text class="footer-text">登录即表示同意</text>
+        <text class="footer-link" @click="goToUserAgreement">《用户协议》</text>
+        <text class="footer-text">和</text>
+        <text class="footer-link" @click="goToPrivacy">《隐私政策》</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { login as loginApi, wxLogin as wxLoginApi } from '@/common/api/user.uts'
+import { login as loginStore } from '@/store/user.uts'
+
+export default {
+  data() {
+    return {
+      loginType: 'password',
+      phone: '',
+      password: '',
+      showPassword: false,
+      loading: false,
+      wxUserType: 1
+    }
+  },
+  methods: {
+    switchLoginType(type) {
+      this.loginType = type
+    },
+
+    togglePassword() {
+      this.showPassword = !this.showPassword
+    },
+
+    // 根据用户类型跳转到对应的首页
+    goAfterLogin(userInfo: any) {
+      const isRunner = userInfo && (userInfo.userType === 2 || userInfo.isRunner === true)
+
+      // 统一延迟，给"登录成功"提示时间
+      setTimeout(() => {
+        if (isRunner) {
+          // 跑腿员：进入跑腿员首页（自定义底部导航）
+          uni.reLaunch({
+            url: '/pages/runner/home'
+          })
+        } else {
+          // 普通用户：进入用户端首页（tabBar）
+          uni.switchTab({
+            url: '/pages/home/index'
+          })
+        }
+      }, 1500)
+    },
+
+    // 根据用户选择的身份跳转到对应首页
+    goAfterLoginByType(userType: number) {
+      setTimeout(() => {
+        if (userType === 2) {
+          // 跑腿员：进入跑腿员首页
+          uni.reLaunch({
+            url: '/pages/runner/home'
+          })
+        } else {
+          // 普通用户：进入用户端首页
+          uni.switchTab({
+            url: '/pages/home/index'
+          })
+        }
+      }, 1500)
+    },
+
+    async handleLogin() {
+      // 验证手机号
+      if (!this.phone || this.phone.length !== 11) {
+        uni.showToast({
+          title: '请输入正确的手机号',
+          icon: 'none'
+        })
+        return
+      }
+
+      // 验证密码
+      if (!this.password || this.password.length < 6) {
+        uni.showToast({
+          title: '密码不能少于6位',
+          icon: 'none'
+        })
+        return
+      }
+
+      this.loading = true
+      try {
+        const res = await loginApi({
+          phone: this.phone,
+          password: this.password
+        })
+
+        // 保存登录信息
+        loginStore(res.token, res.userInfo)
+
+        uni.showToast({
+          title: '登录成功',
+          icon: 'success'
+        })
+
+        // 根据用户类型跳转到对应首页
+        this.goAfterLogin(res.userInfo)
+      } catch (error) {
+        uni.showToast({
+          title: error?.message || '登录失败，请重试',
+          icon: 'none'
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async handleWxLogin() {
+      this.loading = true
+      try {
+        // 获取微信授权code
+        // 注意：uni.login 在微信小程序中会自动获取 code，不需要用户授权
+        const loginRes = await uni.login({
+          provider: 'weixin'
+        })
+
+        console.log('微信登录响应：', loginRes)
+
+        if (!loginRes || !loginRes.code) {
+          const errMsg = loginRes?.errMsg || '获取微信授权失败'
+          console.error('获取微信授权失败：', errMsg)
+          uni.showToast({
+            title: errMsg.includes('login:fail') ? '微信登录失败，请检查网络或稍后重试' : errMsg,
+            icon: 'none',
+            duration: 3000
+          })
+          return
+        }
+
+        console.log('发送登录请求，code：', loginRes.code)
+
+        const res = await wxLoginApi({
+          code: loginRes.code,
+          userType: this.wxUserType
+        })
+
+        console.log('登录响应：', res)
+
+        if (!res || !res.token) {
+          uni.showToast({
+            title: '登录失败，请重试',
+            icon: 'none'
+          })
+          return
+        }
+
+        // 保存登录信息，强制使用用户选择的身份类型
+        const userInfoWithType = {
+          ...res.userInfo,
+          userType: this.wxUserType,
+          isRunner: this.wxUserType === 2
+        }
+        loginStore(res.token, userInfoWithType)
+
+        uni.showToast({
+          title: '登录成功',
+          icon: 'success'
+        })
+
+        // 检查是否已设置密码，未设置则跳转到设置密码页面
+        const hasPassword = res.userInfo && res.userInfo.hasPassword === true
+        if (!hasPassword) {
+          setTimeout(() => {
+            uni.navigateTo({
+              url: '/subpkg/change-password?from=login&userType=' + this.wxUserType
+            })
+          }, 1500)
+          return
+        }
+
+        // 根据用户选择的身份跳转到对应首页
+        this.goAfterLoginByType(this.wxUserType)
+      } catch (error) {
+        console.error('微信登录错误：', error)
+        let errorMsg = '微信登录失败，请重试'
+        
+        if (error && typeof error === 'object') {
+          // 优先使用后端返回的错误信息
+          if (error.message) {
+            errorMsg = error.message
+          } else if (error.errMsg) {
+            // uni.login 的错误信息
+            if (error.errMsg.includes('login:fail')) {
+              errorMsg = '微信登录失败，请检查网络连接或稍后重试'
+            } else {
+              errorMsg = error.errMsg
+            }
+          } else if (error.detail && error.detail.errMsg) {
+            errorMsg = error.detail.errMsg
+          }
+        } else if (typeof error === 'string') {
+          errorMsg = error
+        }
+        
+        uni.showToast({
+          title: errorMsg,
+          icon: 'none',
+          duration: 3000
+        })
+      } finally {
+        this.loading = false
+      }
+    },
+
+    goToRegister() {
+      uni.navigateTo({
+        url: '/subpkg/register-type'
+      })
+    },
+
+    goToForgotPassword() {
+      uni.navigateTo({
+        url: '/subpkg/forgot-password'
+      })
+    },
+
+    goToUserAgreement() {
+      uni.navigateTo({
+        url: '/pages/common/user-agreement'
+      })
+    },
+
+    goToPrivacy() {
+      uni.navigateTo({
+        url: '/pages/common/privacy'
+      })
+    }
+  }
+}
+</script>
+
+<style scoped>
+.login-container {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  height: 100vh;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* 安全区域适配 */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: border-box;
+}
+
+/* 背景装饰 */
+.bg-decoration {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  top: 0;
+  left: 0;
+}
+
+.circle {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  animation: float 20s infinite ease-in-out;
+}
+
+.circle-1 {
+  width: 300rpx;
+  height: 300rpx;
+  top: -100rpx;
+  left: -100rpx;
+}
+
+.circle-2 {
+  width: 200rpx;
+  height: 200rpx;
+  top: 200rpx;
+  right: -50rpx;
+  animation-delay: -5s;
+}
+
+.circle-3 {
+  width: 150rpx;
+  height: 150rpx;
+  bottom: 100rpx;
+  left: 50%;
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-30rpx) rotate(180deg);
+  }
+}
+
+/* 主内容 */
+.content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 60rpx 40rpx 40rpx;
+  box-sizing: border-box;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Logo区域 */
+.logo-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 50rpx;
+  flex-shrink: 0;
+}
+
+.logo {
+  width: 120rpx;
+  height: 120rpx;
+  margin-bottom: 24rpx;
+  border-radius: 30rpx;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.app-name {
+  font-size: 44rpx;
+  font-weight: bold;
+  color: #ffffff;
+  margin-bottom: 8rpx;
+  text-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.2);
+}
+
+.slogan {
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* 表单卡片 */
+.form-card {
+  background: #ffffff;
+  border-radius: 32rpx;
+  padding: 40rpx 32rpx;
+  box-shadow: 0 20rpx 60rpx rgba(37, 99, 235, 0.25);
+  border: 1rpx solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 标签栏 */
+.tab-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 40rpx;
+  background: #f5f5f5;
+  border-radius: 50rpx;
+  padding: 6rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 18rpx 0;
+  border-radius: 50rpx;
+  transition: all 0.3s;
+  min-width: 0;
+}
+
+.tab-item.active {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
+}
+
+.tab-text {
+  font-size: 26rpx;
+  color: #666666;
+}
+
+.tab-item.active .tab-text {
+  color: #ffffff;
+  font-weight: bold;
+}
+
+/* 表单内容 */
+.form-content {
+  animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.input-group {
+  margin-bottom: 24rpx;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.input-group:last-of-type {
+  margin-bottom: 0;
+}
+
+.input-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  background: #f9fafb;
+  border-radius: 50rpx;
+  padding: 0 28rpx;
+  height: 96rpx;
+  border: 1rpx solid #e5e7eb;
+  transition: all 0.3s;
+  box-sizing: border-box;
+  width: 100%;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.input-wrapper:focus-within {
+  border-color: #2563eb;
+  background: #ffffff;
+  box-shadow: 0 0 0 4rpx rgba(37, 99, 235, 0.1);
+}
+
+.input-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34rpx;
+  margin-right: 18rpx;
+  flex-shrink: 0;
+  flex-grow: 0;
+  line-height: 1;
+  width: 34rpx;
+  height: 34rpx;
+  min-width: 34rpx;
+  vertical-align: middle;
+}
+
+.input-field {
+  flex: 1;
+  flex-shrink: 1;
+  flex-grow: 1;
+  font-size: 28rpx;
+  color: #333333;
+  min-width: 0;
+  width: 0;
+  height: 96rpx;
+  line-height: 96rpx;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  vertical-align: middle;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.toggle-password {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  padding: 0;
+  margin-left: 12rpx;
+  flex-shrink: 0;
+  flex-grow: 0;
+  cursor: pointer;
+  line-height: 1;
+  width: 48rpx;
+  height: 48rpx;
+  min-width: 48rpx;
+  vertical-align: middle;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.action-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24rpx;
+  margin-bottom: 32rpx;
+  width: 100%;
+  flex-wrap: nowrap;
+}
+
+.link-text {
+  display: inline-block;
+  font-size: 24rpx;
+  color: #2563eb;
+  font-weight: 500;
+  padding: 8rpx;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.login-btn {
+  width: 100%;
+  height: 96rpx;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
+  border-radius: 50rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10rpx 30rpx rgba(37, 99, 235, 0.4);
+  transition: all 0.3s;
+  margin: 0;
+  padding: 0;
+}
+
+.login-btn:active {
+  transform: scale(0.98);
+  box-shadow: 0 6rpx 20rpx rgba(37, 99, 235, 0.3);
+}
+
+.btn-text {
+  font-size: 30rpx;
+  color: #ffffff;
+  font-weight: bold;
+}
+
+/* 微信登录 */
+.wechat-login {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40rpx 0;
+  animation: fadeIn 0.3s;
+}
+
+.wechat-icon-wrapper {
+  width: 140rpx;
+  height: 140rpx;
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 32rpx;
+  box-shadow: 0 10rpx 30rpx rgba(16, 185, 129, 0.3);
+}
+
+.wechat-icon {
+  font-size: 76rpx;
+}
+
+.wechat-tip {
+  font-size: 26rpx;
+  color: #999999;
+  margin-bottom: 40rpx;
+  text-align: center;
+}
+
+.wechat-btn {
+  width: 100%;
+  height: 96rpx;
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+  border-radius: 50rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10rpx 30rpx rgba(16, 185, 129, 0.4);
+  transition: all 0.3s;
+  margin: 0;
+  padding: 0;
+}
+
+.wechat-btn:active {
+  transform: scale(0.98);
+  box-shadow: 0 6rpx 20rpx rgba(16, 185, 129, 0.3);
+}
+
+.wx-user-type-wrapper {
+  display: flex;
+  flex-direction: row;
+  gap: 20rpx;
+  margin-bottom: 32rpx;
+  width: 100%;
+}
+
+.wx-type-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24rpx 16rpx;
+  background: #f5f7fa;
+  border: 2rpx solid #e5e7eb;
+  border-radius: 16rpx;
+  transition: all 0.3s;
+}
+
+.wx-type-item.active {
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+  border-color: #2563eb;
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
+}
+
+.wx-type-item.runner.active {
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+  border-color: #10b981;
+  box-shadow: 0 4rpx 12rpx rgba(16, 185, 129, 0.3);
+}
+
+.wx-type-icon {
+  font-size: 40rpx;
+  margin-bottom: 8rpx;
+}
+
+.wx-type-text {
+  font-size: 26rpx;
+  color: #666666;
+  font-weight: 500;
+}
+
+.wx-type-item.active .wx-type-text {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+/* 底部 */
+.footer {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: nowrap;
+  margin-top: 40rpx;
+  flex-shrink: 0;
+  padding: 0 20rpx;
+  white-space: nowrap;
+}
+
+.footer-text {
+  display: inline;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.5;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.footer-link {
+  display: inline;
+  font-size: 22rpx;
+  color: #ffffff;
+  text-decoration: underline;
+  margin: 0 4rpx;
+  line-height: 1.5;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 响应式优化 - 小屏幕适配 */
+@media screen and (max-height: 667px) {
+  .content {
+    padding: 40rpx 40rpx 30rpx;
+  }
+  
+  .logo-section {
+    margin-bottom: 30rpx;
+  }
+  
+  .logo {
+    width: 100rpx;
+    height: 100rpx;
+    margin-bottom: 20rpx;
+  }
+  
+  .app-name {
+    font-size: 40rpx;
+  }
+  
+  .slogan {
+    font-size: 24rpx;
+  }
+  
+  .form-card {
+    padding: 32rpx 28rpx;
+  }
+  
+  .footer {
+    margin-top: 30rpx;
+  }
+}
+
+/* 优化按钮点击区域 */
+.login-btn,
+.wechat-btn {
+  position: relative;
+}
+
+/* 防止内容溢出 */
+.form-content,
+.wechat-login {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 确保输入框内部元素横向排列，防止换行 */
+.input-wrapper {
+  white-space: nowrap;
+}
+
+/* 确保输入框可以正确显示内容 */
+.input-field::placeholder {
+  color: #9ca3af;
+  font-size: 28rpx;
+}
+
+/* 优化文本选择 */
+.tab-text,
+.btn-text,
+.link-text,
+.footer-text,
+.footer-link {
+  user-select: none;
+  -webkit-user-select: none;
+}
+</style>
