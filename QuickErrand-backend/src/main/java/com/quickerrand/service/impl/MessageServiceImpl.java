@@ -200,4 +200,27 @@ public class MessageServiceImpl implements MessageService {
                 return "未知类型";
         }
     }
+
+    @Override
+    public void deleteByOrderId(Long orderId) {
+        messageMapper.delete(
+                new LambdaQueryWrapper<Message>()
+                        .eq(Message::getRelatedId, orderId)
+                        .eq(Message::getType, 1)
+        );
+        log.info("删除订单相关消息，订单ID：{}", orderId);
+    }
+
+    @Override
+    public void deleteByOrderIds(List<Long> orderIds) {
+        if (orderIds == null || orderIds.isEmpty()) {
+            return;
+        }
+        messageMapper.delete(
+                new LambdaQueryWrapper<Message>()
+                        .in(Message::getRelatedId, orderIds)
+                        .eq(Message::getType, 1)
+        );
+        log.info("批量删除订单相关消息，订单ID列表：{}", orderIds);
+    }
 }

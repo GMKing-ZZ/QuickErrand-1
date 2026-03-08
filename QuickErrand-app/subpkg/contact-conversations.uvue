@@ -36,30 +36,42 @@
     <!-- 订单会话列表 -->
     <scroll-view v-else class="list-scroll" scroll-y enable-back-to-top>
       <view
-        v-for="item in conversations"
+        v-for="(item, index) in conversations"
         :key="item.orderId"
-        class="order-item"
-        @click="openChatSession(item)"
+        class="order-item-wrapper"
       >
-        <view class="order-info">
-          <view class="order-header">
-            <text class="order-no">订单号: {{ item.orderNo }}</text>
-            <text class="order-status" :class="getStatusClass(item.orderStatus)">
-              {{ getStatusText(item.orderStatus) }}
-            </text>
-          </view>
-          <text class="order-title" v-if="item.orderTitle">{{ item.orderTitle }}</text>
-          <view class="order-footer">
-            <text class="last-msg" :class="{ 'last-msg-empty': !item.lastContent }">
-              {{ formatLastContent(item.lastContent) }}
-            </text>
-            <text class="time-text" v-if="item.lastTime">{{ formatTime(item.lastTime) }}</text>
+        <view
+          class="order-item-swipe"
+          :style="{ transform: `translateX(${item._translateX || 0}px)` }"
+          @touchstart="onTouchStart($event, index)"
+          @touchmove="onTouchMove($event, index)"
+          @touchend="onTouchEnd($event, index)"
+        >
+          <view class="order-item" @click="openChatSession(item)">
+            <view class="order-info">
+              <view class="order-header">
+                <text class="order-no">订单号: {{ item.orderNo }}</text>
+                <text class="order-status" :class="getStatusClass(item.orderStatus)">
+                  {{ getStatusText(item.orderStatus) }}
+                </text>
+              </view>
+              <text class="order-title" v-if="item.orderTitle">{{ item.orderTitle }}</text>
+              <view class="order-footer">
+                <text class="last-msg" :class="{ 'last-msg-empty': !item.lastContent }">
+                  {{ formatLastContent(item.lastContent) }}
+                </text>
+                <text class="time-text" v-if="item.lastTime">{{ formatTime(item.lastTime) }}</text>
+              </view>
+            </view>
+            <view v-if="item.unreadCount > 0" class="unread-badge">
+              <text class="unread-text">
+                {{ item.unreadCount > 99 ? '99+' : String(item.unreadCount) }}
+              </text>
+            </view>
           </view>
         </view>
-        <view v-if="item.unreadCount > 0" class="unread-badge">
-          <text class="unread-text">
-            {{ item.unreadCount > 99 ? '99+' : String(item.unreadCount) }}
-          </text>
+        <view class="delete-btn" @click="confirmDelete(item, index)">
+          <text class="delete-btn-text">删除</text>
         </view>
       </view>
     </scroll-view>
@@ -68,7 +80,9 @@
 
 <script>
 import type { ChatOrderConversation } from '@/common/api/chat.uts'
-import { getContactOrderConversations } from '@/common/api/chat.uts'
+import { getContactOrderConversations, deleteOrderConversation } from '@/common/api/chat.uts'
+
+const DELETE_BTN_WIDTH = 70
 
 export default {
   data() {
@@ -77,7 +91,10 @@ export default {
       contactId: 0 as number,
       contactNickname: '' as string,
       contactAvatar: '' as string,
-      conversations: [] as ChatOrderConversation[]
+      conversations: [] as ChatOrderConversation[],
+      startX: 0,
+      startY: 0,
+      currentIndex: -1
     }
   },
   onLoad(options: any) {
@@ -105,7 +122,12 @@ export default {
       this.loading = true
       try {
         const list = await getContactOrderConversations(this.contactId)
-        this.conversations = list || []
+        this.conversations = (list || []).map((item: ChatOrderConversation) => {
+          return {
+            ...item,
+            _translateX: 0
+          } as any
+        })
       } catch (error) {
         console.error('获取订单聊天列表失败:', error)
         uni.showToast({
@@ -117,8 +139,90 @@ export default {
       }
     },
 
+    onTouchStart(e: TouchEvent, index: number) {
+      if (e.touches.length > 0) {
+        this.startX = e.touches[0].clientX
+        this.startY = e.touches[0].clientY
+        if (this.currentIndex !== index && this.currentIndex >= 0) {
+          this.closeSwipe(this.currentIndex)
+        }
+        this.currentIndex = index
+      }
+    },
+
+    onTouchMove(e: TouchEvent, index: number) {
+      if (e.touches.length > 0) {
+        const moveX = e.touches[0].clientX - this.startX
+        const moveY = e.touches[0].clientY - this.startY
+        if (Math.abs(moveY) > Math.abs(moveX)) {
+          return
+        }
+        const item = this.conversations[index] as any
+        let translateX = (item._translateX || 0) + moveX
+        if (translateX > 0) translateX = 0
+        if (translateX < -DELETE_BTN_WIDTH) translateX = -DELETE_BTN_WIDTH
+        item._translateX = translateX
+        this.startX = e.touches[0].clientX
+      }
+    },
+
+    onTouchEnd(e: TouchEvent, index: number) {
+      const item = this.conversations[index] as any
+      const translateX = item._translateX || 0
+      if (translateX < -DELETE_BTN_WIDTH / 2) {
+        item._translateX = -DELETE_BTN_WIDTH
+      } else {
+        item._translateX = 0
+      }
+    },
+
+    closeSwipe(index: number) {
+      const item = this.conversations[index] as any
+      if (item) {
+        item._translateX = 0
+      }
+    },
+
+    confirmDelete(item: ChatOrderConversation, index: number) {
+      uni.showModal({
+        title: '确认删除',
+        content: `确定删除订单 ${item.orderNo} 的聊天记录吗？删除后您将无法看到之前的聊天记录，但对方不受影响。`,
+        success: (res) => {
+          if (res.confirm) {
+            this.doDelete(item, index)
+          } else {
+            this.closeSwipe(index)
+          }
+        }
+      })
+    },
+
+    async doDelete(item: ChatOrderConversation, index: number) {
+      try {
+        await deleteOrderConversation(this.contactId, item.orderId)
+        this.conversations.splice(index, 1)
+        this.currentIndex = -1
+        uni.showToast({
+          title: '删除成功',
+          icon: 'success'
+        })
+      } catch (error) {
+        console.error('删除订单会话失败:', error)
+        uni.showToast({
+          title: '删除失败，请重试',
+          icon: 'none'
+        })
+        this.closeSwipe(index)
+      }
+    },
+
     openChatSession(item: ChatOrderConversation) {
       if (!item || !item.orderId) return
+      const translateX = (item as any)._translateX || 0
+      if (translateX < 0) {
+        this.closeSwipe(this.conversations.indexOf(item))
+        return
+      }
       uni.navigateTo({
         url: `/subpkg/chat-session?orderId=${item.orderId}`
       })
@@ -319,15 +423,47 @@ export default {
   box-sizing: border-box;
 }
 
+.order-item-wrapper {
+  position: relative;
+  margin-bottom: 16rpx;
+  overflow: hidden;
+}
+
+.order-item-swipe {
+  position: relative;
+  z-index: 2;
+  background: #ffffff;
+  border-radius: 18rpx;
+  transition: transform 0.1s ease;
+}
+
 .order-item {
   flex-direction: row;
   display: flex;
   padding: 20rpx 16rpx;
-  margin-bottom: 16rpx;
   background: #ffffff;
   border-radius: 18rpx;
   box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.06);
   align-items: center;
+}
+
+.delete-btn {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 140rpx;
+  background: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 18rpx 18rpx 0;
+}
+
+.delete-btn-text {
+  font-size: 28rpx;
+  color: #ffffff;
+  font-weight: 500;
 }
 
 .order-info {

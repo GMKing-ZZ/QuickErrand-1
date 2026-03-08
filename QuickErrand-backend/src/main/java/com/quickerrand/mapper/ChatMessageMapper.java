@@ -26,16 +26,27 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
             "  last_time AS lastTime " +
             "FROM ( " +
             "  SELECT " +
-            "    CASE WHEN from_user_id = #{userId} THEN to_user_id ELSE from_user_id END AS peer_id, " +
-            "    content AS last_content, " +
-            "    send_time AS last_time, " +
-            "    ROW_NUMBER() OVER (PARTITION BY CASE WHEN from_user_id = #{userId} THEN to_user_id ELSE from_user_id END ORDER BY send_time DESC) AS rn " +
-            "  FROM t_chat_message " +
-            "  WHERE from_user_id = #{userId} OR to_user_id = #{userId} " +
+            "    CASE WHEN m.from_user_id = #{userId} THEN m.to_user_id ELSE m.from_user_id END AS peer_id, " +
+            "    m.content AS last_content, " +
+            "    m.send_time AS last_time, " +
+            "    ROW_NUMBER() OVER (PARTITION BY CASE WHEN m.from_user_id = #{userId} THEN m.to_user_id ELSE m.from_user_id END ORDER BY m.send_time DESC) AS rn " +
+            "  FROM t_chat_message m " +
+            "  LEFT JOIN t_chat_delete_record d ON d.user_id = #{userId} " +
+            "    AND d.contact_id = CASE WHEN m.from_user_id = #{userId} THEN m.to_user_id ELSE m.from_user_id END " +
+            "    AND d.order_id IS NULL " +
+            "  WHERE (m.from_user_id = #{userId} OR m.to_user_id = #{userId}) " +
+            "  AND m.send_time > COALESCE(d.delete_time, 0) " +
             ") t WHERE rn = 1")
     List<Map<String, Object>> selectLatestMessageWithEachContact(@Param("userId") Long userId);
 
-    @Select("SELECT COUNT(*) FROM t_chat_message WHERE to_user_id = #{userId} AND from_user_id = #{contactId} AND read_status = 0")
+    @Select("SELECT COALESCE(MAX(d.delete_time), 0) FROM t_chat_delete_record d " +
+            "WHERE d.user_id = #{userId} AND d.contact_id = #{contactId} AND d.order_id IS NULL")
+    Long getContactDeleteTime(@Param("userId") Long userId, @Param("contactId") Long contactId);
+
+    @Select("SELECT COUNT(*) FROM t_chat_message m " +
+            "LEFT JOIN t_chat_delete_record d ON d.user_id = #{userId} AND d.contact_id = #{contactId} AND d.order_id IS NULL " +
+            "WHERE m.to_user_id = #{userId} AND m.from_user_id = #{contactId} AND m.read_status = 0 " +
+            "AND m.send_time > COALESCE(d.delete_time, 0)")
     Integer countUnreadFromContact(@Param("userId") Long userId, @Param("contactId") Long contactId);
 
     @Select("SELECT " +
@@ -44,21 +55,31 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
             "  last_time AS lastTime " +
             "FROM ( " +
             "  SELECT " +
-            "    order_id, " +
-            "    content AS last_content, " +
-            "    send_time AS last_time, " +
-            "    ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY send_time DESC) AS rn " +
-            "  FROM t_chat_message " +
-            "  WHERE (from_user_id = #{userId} AND to_user_id = #{contactId}) " +
-            "     OR (to_user_id = #{userId} AND from_user_id = #{contactId}) " +
+            "    m.order_id, " +
+            "    m.content AS last_content, " +
+            "    m.send_time AS last_time, " +
+            "    ROW_NUMBER() OVER (PARTITION BY m.order_id ORDER BY m.send_time DESC) AS rn " +
+            "  FROM t_chat_message m " +
+            "  LEFT JOIN t_chat_delete_record d ON d.user_id = #{userId} " +
+            "    AND d.contact_id = #{contactId} " +
+            "    AND d.order_id = m.order_id " +
+            "  WHERE ((m.from_user_id = #{userId} AND m.to_user_id = #{contactId}) " +
+            "     OR (m.to_user_id = #{userId} AND m.from_user_id = #{contactId})) " +
+            "  AND m.send_time > COALESCE(d.delete_time, 0) " +
             ") t WHERE rn = 1")
     List<Map<String, Object>> selectLatestMessageWithContactByOrder(@Param("userId") Long userId, @Param("contactId") Long contactId);
 
-    @Select("SELECT COUNT(*) FROM t_chat_message " +
-            "WHERE to_user_id = #{userId} " +
-            "AND from_user_id = #{contactId} " +
-            "AND order_id = #{orderId} " +
-            "AND read_status = 0")
+    @Select("SELECT COALESCE(MAX(d.delete_time), 0) FROM t_chat_delete_record d " +
+            "WHERE d.user_id = #{userId} AND d.contact_id = #{contactId} AND d.order_id = #{orderId}")
+    Long getOrderDeleteTime(@Param("userId") Long userId, @Param("contactId") Long contactId, @Param("orderId") Long orderId);
+
+    @Select("SELECT COUNT(*) FROM t_chat_message m " +
+            "LEFT JOIN t_chat_delete_record d ON d.user_id = #{userId} AND d.contact_id = #{contactId} AND d.order_id = #{orderId} " +
+            "WHERE m.to_user_id = #{userId} " +
+            "AND m.from_user_id = #{contactId} " +
+            "AND m.order_id = #{orderId} " +
+            "AND m.read_status = 0 " +
+            "AND m.send_time > COALESCE(d.delete_time, 0)")
     Integer countUnreadFromContactInOrder(@Param("userId") Long userId, @Param("contactId") Long contactId, @Param("orderId") Long orderId);
 }
 

@@ -105,4 +105,18 @@ public interface MessageService {
      * @return 消息ID
      */
     Long sendSystemMessageToUser(Long userId, String title, String content, Long relatedId);
+
+    /**
+     * 删除与订单相关的消息
+     *
+     * @param orderId 订单ID
+     */
+    void deleteByOrderId(Long orderId);
+
+    /**
+     * 批量删除与订单相关的消息
+     *
+     * @param orderIds 订单ID列表
+     */
+    void deleteByOrderIds(List<Long> orderIds);
 }

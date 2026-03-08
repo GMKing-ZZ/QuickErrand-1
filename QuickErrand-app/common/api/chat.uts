@@ -1,7 +1,7 @@
 /**
  * 聊天相关 API
  */
-import { get } from '../utils/request.uts'
+import { get, del } from '../utils/request.uts'
 
 export type ChatContact = {
   contactId : number
@@ -91,5 +91,21 @@ export const getChatMessages = (orderId : number, lastMessageId ?: number | null
  */
 export const getChatPeerInfo = (orderId : number) : Promise<ChatPeerInfo> => {
   return get<ChatPeerInfo>('/chat/peer-info', { orderId })
+}
+
+/**
+ * 删除联系人聊天记录
+ * 删除后，当前用户无法看到删除前的聊天记录，对方不受影响
+ */
+export const deleteChatContact = (contactId : number) : Promise<any> => {
+  return del<any>(`/chat/contact/${contactId}`)
+}
+
+/**
+ * 删除订单会话聊天记录
+ * 删除后，当前用户无法看到删除前的聊天记录，对方不受影响
+ */
+export const deleteOrderConversation = (contactId : number, orderId : number) : Promise<any> => {
+  return del<any>(`/chat/order-conversation/${contactId}/${orderId}`)
 }
 

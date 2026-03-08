@@ -9,34 +9,52 @@ type MessageStateType = {
   chatUnread: number
   totalUnread: number
   lastFetchTime: number
+  isFetching: boolean
 }
 
 export const messageState = reactive({
   messageUnread: 0,
   chatUnread: 0,
   totalUnread: 0,
-  lastFetchTime: 0
+  lastFetchTime: 0,
+  isFetching: false
 } as MessageStateType)
 
 let fetchTimer: number | null = null
+let retryCount: number = 0
+const MAX_RETRY = 3
+const POLLING_INTERVAL = 30000
+const RETRY_DELAY = 5000
 
 /**
  * 刷新未读消息统计
  */
 export const refreshUnreadCount = async () => {
+  if (messageState.isFetching) return
+  
+  messageState.isFetching = true
   try {
     const stats = await getUnreadStats()
     messageState.messageUnread = stats.messageUnread
     messageState.chatUnread = stats.chatUnread
     messageState.totalUnread = stats.totalUnread
     messageState.lastFetchTime = Date.now()
+    retryCount = 0
   } catch (error) {
     console.error('获取未读消息统计失败:', error)
+    retryCount++
+    if (retryCount <= MAX_RETRY) {
+      setTimeout(() => {
+        refreshUnreadCount()
+      }, RETRY_DELAY)
+    }
+  } finally {
+    messageState.isFetching = false
   }
 }
 
 /**
- * 开始定时刷新未读消息（每60秒刷新一次）
+ * 开始定时刷新未读消息
  */
 export const startUnreadPolling = () => {
   if (fetchTimer !== null) {
@@ -45,7 +63,7 @@ export const startUnreadPolling = () => {
   refreshUnreadCount()
   fetchTimer = setInterval(() => {
     refreshUnreadCount()
-  }, 60000) as unknown as number
+  }, POLLING_INTERVAL) as unknown as number
 }
 
 /**
@@ -77,4 +95,13 @@ export const clearChatUnread = () => {
 export const decreaseChatUnread = (count: number) => {
   messageState.chatUnread = Math.max(0, messageState.chatUnread - count)
   messageState.totalUnread = Math.max(0, messageState.totalUnread - count)
+}
+
+/**
+ * 重置所有未读计数
+ */
+export const resetAllUnread = () => {
+  messageState.messageUnread = 0
+  messageState.chatUnread = 0
+  messageState.totalUnread = 0
 }

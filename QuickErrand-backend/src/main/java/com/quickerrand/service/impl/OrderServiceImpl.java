@@ -26,6 +26,7 @@ import com.quickerrand.mapper.ChatOrderRelMapper;
 import com.quickerrand.service.OrderService;
 import com.quickerrand.service.OrderTypeService;
 import com.quickerrand.service.UserService;
+import com.quickerrand.service.RunnerBlacklistService;
 import com.quickerrand.vo.OrderListVO;
 import com.quickerrand.vo.OrderVO;
 import lombok.extern.slf4j.Slf4j;
@@ -82,6 +83,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Autowired
     private ChatOrderRelMapper chatOrderRelMapper;
+
+    @Autowired
+    private RunnerBlacklistService runnerBlacklistService;
 
     @Override
     public BigDecimal calculateFee(CalculateFeeDTO calculateFeeDTO) {
@@ -368,6 +372,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             orderVO.setEvaluated(false);
         }
 
+        // 如果是跑腿员查看待接单订单，检查是否被下单用户拉黑
+        if (currentUser.getUserType() != null && currentUser.getUserType() == 2 
+                && order.getStatus() != null && order.getStatus() == 2) {
+            boolean isBlacklisted = runnerBlacklistService.isBlacklisted(order.getUserId(), userId);
+            orderVO.setBlacklisted(isBlacklisted);
+        }
+
         return orderVO;
     }
 
@@ -615,27 +626,27 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     @Override
-    public List<OrderVO> getPendingOrders() {
-        // 查询待接单的订单（状态为2）
+    public List<OrderVO> getPendingOrders(Long runnerId) {
         LambdaQueryWrapper<Order> queryWrapper =
             new LambdaQueryWrapper<>();
-        queryWrapper.eq(Order::getStatus, 2); // 待接单（数据库状态值：2待接单）
+        queryWrapper.eq(Order::getStatus, 2);
         queryWrapper.orderByDesc(Order::getCreateTime);
         List<Order> orders = list(queryWrapper);
 
-        // 转换为VO
         List<OrderVO> orderVOList = new ArrayList<>();
         for (Order order : orders) {
             OrderVO orderVO = BeanUtil.copyProperties(order, OrderVO.class);
 
-            // 获取订单类型名称
             OrderType orderType = orderTypeService.getById(order.getOrderTypeId());
             if (orderType != null) {
                 orderVO.setOrderTypeName(orderType.getTypeName());
             }
 
-            // 设置订单状态文本
             orderVO.setStatusText(getStatusText(order.getStatus()));
+
+            if (runnerId != null) {
+                orderVO.setBlacklisted(runnerBlacklistService.isBlacklisted(order.getUserId(), runnerId));
+            }
 
             orderVOList.add(orderVO);
         }
@@ -647,24 +658,24 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void acceptOrder(Long runnerId, Long orderId) {
-        // 查询订单
         Order order = getById(orderId);
         if (order == null) {
             throw new BusinessException("订单不存在");
         }
 
-        // 检查订单状态是否为待接单（数据库状态值：2待接单）
         if (order.getStatus() != 2) {
             throw new BusinessException("该订单不是待接单状态");
         }
 
-        // 检查订单是否已被其他跑腿员接单
         if (order.getRunnerId() != null) {
             throw new BusinessException("该订单已被其他跑腿员接单");
         }
 
-        // 更新订单状态
-        order.setStatus(3); // 服务中（数据库状态值：3服务中）
+        if (runnerBlacklistService.isBlacklisted(order.getUserId(), runnerId)) {
+            throw new BusinessException("您已被该用户拉黑，无法接此订单");
+        }
+
+        order.setStatus(3);
         order.setRunnerId(runnerId);
         order.setAcceptTime(LocalDateTime.now());
         updateById(order);
@@ -1139,6 +1150,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         chatOrderRelMapper.delete(new LambdaQueryWrapper<ChatOrderRel>()
                 .eq(ChatOrderRel::getOrderId, orderId));
 
+        messageService.deleteByOrderId(orderId);
+
         removeById(orderId);
         log.info("管理员删除订单，订单ID：{}", orderId);
     }
@@ -1155,6 +1168,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
         chatOrderRelMapper.delete(new LambdaQueryWrapper<ChatOrderRel>()
                 .in(ChatOrderRel::getOrderId, orderIds));
+
+        messageService.deleteByOrderIds(orderIds);
 
         removeByIds(orderIds);
         log.info("管理员批量删除订单，订单ID列表：{}", orderIds);

@@ -24,37 +24,49 @@
     <!-- 联系人列表 -->
     <scroll-view v-else class="list-scroll" scroll-y enable-back-to-top>
       <view
-        v-for="item in contacts"
+        v-for="(item, index) in contacts"
         :key="item.contactId"
-        class="contact-item"
-        @click="openContactConversations(item)"
+        class="contact-item-wrapper"
       >
-        <view class="avatar-wrapper">
-          <image
-            v-if="item.avatar"
-            class="avatar-image"
-            :src="item.avatar"
-            mode="aspectFill"
-          />
-          <view v-else class="avatar-placeholder">
-            <text class="avatar-text">{{ (item.nickname || '聊').charAt(0) }}</text>
-          </view>
-        </view>
-        <view class="contact-main">
-          <view class="contact-top">
-            <text class="contact-name">{{ item.nickname || '对方' }}</text>
-            <text class="time-text" v-if="item.lastTime">{{ formatTime(item.lastTime) }}</text>
-          </view>
-          <view class="contact-bottom">
-            <text class="last-msg" :class="{ 'last-msg-empty': !item.lastContent }">
-              {{ formatLastContent(item.lastContent) }}
-            </text>
-            <view v-if="item.unreadCount > 0" class="unread-badge">
-              <text class="unread-text">
-                {{ item.unreadCount > 99 ? '99+' : String(item.unreadCount) }}
-              </text>
+        <view
+          class="contact-item-swipe"
+          :style="{ transform: `translateX(${item._translateX || 0}px)` }"
+          @touchstart="onTouchStart($event, index)"
+          @touchmove="onTouchMove($event, index)"
+          @touchend="onTouchEnd($event, index)"
+        >
+          <view class="contact-item" @click="openContactConversations(item)">
+            <view class="avatar-wrapper">
+              <image
+                v-if="item.avatar"
+                class="avatar-image"
+                :src="item.avatar"
+                mode="aspectFill"
+              />
+              <view v-else class="avatar-placeholder">
+                <text class="avatar-text">{{ (item.nickname || '聊').charAt(0) }}</text>
+              </view>
+            </view>
+            <view class="contact-main">
+              <view class="contact-top">
+                <text class="contact-name">{{ item.nickname || '对方' }}</text>
+                <text class="time-text" v-if="item.lastTime">{{ formatTime(item.lastTime) }}</text>
+              </view>
+              <view class="contact-bottom">
+                <text class="last-msg" :class="{ 'last-msg-empty': !item.lastContent }">
+                  {{ formatLastContent(item.lastContent) }}
+                </text>
+                <view v-if="item.unreadCount > 0" class="unread-badge">
+                  <text class="unread-text">
+                    {{ item.unreadCount > 99 ? '99+' : String(item.unreadCount) }}
+                  </text>
+                </view>
+              </view>
             </view>
           </view>
+        </view>
+        <view class="delete-btn" @click="confirmDelete(item, index)">
+          <text class="delete-btn-text">删除</text>
         </view>
       </view>
     </scroll-view>
@@ -66,9 +78,11 @@
 
 <script>
 import type { ChatContact } from '@/common/api/chat.uts'
-import { getChatContacts } from '@/common/api/chat.uts'
+import { getChatContacts, deleteChatContact } from '@/common/api/chat.uts'
 import RunnerTabBar from '@/components/RunnerTabBar.uvue'
 import { refreshUnreadCount } from '@/store/message.uts'
+
+const DELETE_BTN_WIDTH = 70
 
 export default {
   components: {
@@ -78,7 +92,10 @@ export default {
     return {
       loading: true,
       contacts: [] as ChatContact[],
-      fromRunnerTab: false
+      fromRunnerTab: false,
+      startX: 0,
+      startY: 0,
+      currentIndex: -1
     }
   },
   onLoad(options: any) {
@@ -118,7 +135,12 @@ export default {
       this.loading = true
       try {
         const list = await getChatContacts()
-        this.contacts = list || []
+        this.contacts = (list || []).map((item: ChatContact) => {
+          return {
+            ...item,
+            _translateX: 0
+          } as any
+        })
       } catch (error) {
         console.error('获取联系人列表失败:', error)
         uni.showToast({
@@ -130,8 +152,91 @@ export default {
       }
     },
 
+    onTouchStart(e: TouchEvent, index: number) {
+      if (e.touches.length > 0) {
+        this.startX = e.touches[0].clientX
+        this.startY = e.touches[0].clientY
+        if (this.currentIndex !== index && this.currentIndex >= 0) {
+          this.closeSwipe(this.currentIndex)
+        }
+        this.currentIndex = index
+      }
+    },
+
+    onTouchMove(e: TouchEvent, index: number) {
+      if (e.touches.length > 0) {
+        const moveX = e.touches[0].clientX - this.startX
+        const moveY = e.touches[0].clientY - this.startY
+        if (Math.abs(moveY) > Math.abs(moveX)) {
+          return
+        }
+        const item = this.contacts[index] as any
+        let translateX = (item._translateX || 0) + moveX
+        if (translateX > 0) translateX = 0
+        if (translateX < -DELETE_BTN_WIDTH) translateX = -DELETE_BTN_WIDTH
+        item._translateX = translateX
+        this.startX = e.touches[0].clientX
+      }
+    },
+
+    onTouchEnd(e: TouchEvent, index: number) {
+      const item = this.contacts[index] as any
+      const translateX = item._translateX || 0
+      if (translateX < -DELETE_BTN_WIDTH / 2) {
+        item._translateX = -DELETE_BTN_WIDTH
+      } else {
+        item._translateX = 0
+      }
+    },
+
+    closeSwipe(index: number) {
+      const item = this.contacts[index] as any
+      if (item) {
+        item._translateX = 0
+      }
+    },
+
+    confirmDelete(item: ChatContact, index: number) {
+      uni.showModal({
+        title: '确认删除',
+        content: `确定删除与 ${item.nickname || '对方'} 的聊天记录吗？删除后您将无法看到之前的聊天记录，但对方不受影响。`,
+        success: (res) => {
+          if (res.confirm) {
+            this.doDelete(item, index)
+          } else {
+            this.closeSwipe(index)
+          }
+        }
+      })
+    },
+
+    async doDelete(item: ChatContact, index: number) {
+      try {
+        await deleteChatContact(item.contactId)
+        this.contacts.splice(index, 1)
+        this.currentIndex = -1
+        uni.showToast({
+          title: '删除成功',
+          icon: 'success'
+        })
+        refreshUnreadCount()
+      } catch (error) {
+        console.error('删除联系人失败:', error)
+        uni.showToast({
+          title: '删除失败，请重试',
+          icon: 'none'
+        })
+        this.closeSwipe(index)
+      }
+    },
+
     openContactConversations(item: ChatContact) {
       if (!item || !item.contactId) return
+      const translateX = (item as any)._translateX || 0
+      if (translateX < 0) {
+        this.closeSwipe(this.contacts.indexOf(item))
+        return
+      }
       uni.navigateTo({
         url: `/subpkg/contact-conversations?contactId=${item.contactId}&nickname=${encodeURIComponent(item.nickname || '对方')}&avatar=${encodeURIComponent(item.avatar || '')}`
       })
@@ -275,14 +380,46 @@ export default {
   box-sizing: border-box;
 }
 
+.contact-item-wrapper {
+  position: relative;
+  margin-bottom: 16rpx;
+  overflow: hidden;
+}
+
+.contact-item-swipe {
+  position: relative;
+  z-index: 2;
+  background: #ffffff;
+  border-radius: 18rpx;
+  transition: transform 0.1s ease;
+}
+
 .contact-item {
   flex-direction: row;
   display: flex;
   padding: 20rpx 16rpx;
-  margin-bottom: 16rpx;
   background: #ffffff;
   border-radius: 18rpx;
   box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.06);
+}
+
+.delete-btn {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 140rpx;
+  background: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 18rpx 18rpx 0;
+}
+
+.delete-btn-text {
+  font-size: 28rpx;
+  color: #ffffff;
+  font-weight: 500;
 }
 
 .avatar-wrapper {

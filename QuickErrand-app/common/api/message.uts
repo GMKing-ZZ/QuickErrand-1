@@ -1,7 +1,7 @@
 /**
  * 消息通知相关API
  */
-import { post, get } from '../utils/request.uts'
+import { post, get, del } from '../utils/request.uts'
 
 /**
  * 消息通知信息
@@ -59,4 +59,11 @@ export const markMessageAsRead = (messageId : number) : Promise<any> => {
  */
 export const markAllMessagesAsRead = () : Promise<any> => {
   return post('/message/read-all', {})
+}
+
+/**
+ * 删除消息通知
+ */
+export const deleteMessage = (messageId : number) : Promise<any> => {
+  return del<any>(`/message/${messageId}`)
 }

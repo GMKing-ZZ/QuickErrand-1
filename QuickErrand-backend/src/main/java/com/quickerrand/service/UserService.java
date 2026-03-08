@@ -11,6 +11,7 @@ import com.quickerrand.dto.UserQueryDTO;
 import com.quickerrand.dto.WxLoginDTO;
 import com.quickerrand.entity.User;
 import com.quickerrand.vo.LoginVO;
+import com.quickerrand.vo.UserDetailVO;
 import com.quickerrand.vo.UserListVO;
 import com.quickerrand.vo.UserVO;
 
@@ -138,5 +139,7 @@ public interface UserService extends IService<User> {
      * @param resetPasswordDTO 重置密码信息
      */
     void resetPassword(ResetPasswordDTO resetPasswordDTO);
+
+    UserDetailVO getUserDetail(Long userId);
 }
 

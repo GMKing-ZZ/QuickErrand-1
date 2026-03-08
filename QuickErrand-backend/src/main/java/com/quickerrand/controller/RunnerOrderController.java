@@ -30,8 +30,9 @@ public class RunnerOrderController {
     @ApiOperation("获取待接单列表")
     @GetMapping("/pending")
     public Result<List<OrderVO>> getPendingOrders() {
-        List<OrderVO> orders = orderService.getPendingOrders();
-        return Result.success(orders);
+        Long runnerId = SecurityUtils.getCurrentUserId();
+        List<OrderVO> orderList = orderService.getPendingOrders(runnerId);
+        return Result.success(orderList);
     }
 
     @ApiOperation("接单")

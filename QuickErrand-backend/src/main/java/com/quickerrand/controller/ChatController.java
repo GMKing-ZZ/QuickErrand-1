@@ -13,7 +13,9 @@ import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -121,6 +123,22 @@ public class ChatController {
             log.error("上传聊天图片失败", e);
             return Result.error("上传失败，请稍后重试");
         }
+    }
+
+    @ApiOperation("删除联系人聊天记录")
+    @DeleteMapping("/contact/{contactId}")
+    public Result<Void> deleteContact(@PathVariable Long contactId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        chatService.deleteContact(userId, contactId);
+        return Result.success();
+    }
+
+    @ApiOperation("删除订单会话聊天记录")
+    @DeleteMapping("/order-conversation/{contactId}/{orderId}")
+    public Result<Void> deleteOrderConversation(@PathVariable Long contactId, @PathVariable Long orderId) {
+        Long userId = SecurityUtils.getCurrentUserId();
+        chatService.deleteOrderConversation(userId, contactId, orderId);
+        return Result.success();
     }
 }
 

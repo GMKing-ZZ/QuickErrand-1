@@ -6,7 +6,13 @@
         <text class="back-icon">‹</text>
       </view>
       <text class="nav-title">消息通知</text>
-      <view class="placeholder"></view>
+      <view 
+        class="clear-btn" 
+        :class="{ 'clear-btn-disabled': !hasUnread }"
+        @click="hasUnread && markAllAsRead()"
+      >
+        <text class="clear-btn-text">一键已读</text>
+      </view>
     </view>
 
     <!-- 加载中 -->
@@ -55,29 +61,44 @@
       <!-- 消息列表 -->
       <view v-if="messages.length > 0" class="messages-list">
         <view
-          v-for="message in messages"
+          v-for="(message, index) in messages"
           :key="message.id"
-          class="message-card"
-          :class="{ unread: message.isRead === 0 }"
-          @click="handleMessageClick(message)"
+          class="message-item-wrapper"
         >
-          <!-- 未读标记 -->
-          <view v-if="message.isRead === 0" class="unread-badge"></view>
+          <view
+            class="message-item-swipe"
+            :style="{ transform: `translateX(${message._translateX || 0}px)` }"
+            @touchstart="onTouchStart($event, index)"
+            @touchmove="onTouchMove($event, index)"
+            @touchend="onTouchEnd($event, index)"
+          >
+            <view
+              class="message-card"
+              :class="{ unread: message.isRead === 0 }"
+              @click="handleMessageClick(message)"
+            >
+              <!-- 未读标记 -->
+              <view v-if="message.isRead === 0" class="unread-badge"></view>
 
-          <!-- 消息头部 -->
-          <view class="message-header">
-            <view class="type-badge" :class="getTypeBadgeClass(message.type)">
-              <text class="type-icon">{{ getTypeIcon(message.type) }}</text>
-              <text class="type-text">{{ message.typeText }}</text>
+              <!-- 消息头部 -->
+              <view class="message-header">
+                <view class="type-badge" :class="getTypeBadgeClass(message.type)">
+                  <text class="type-icon">{{ getTypeIcon(message.type) }}</text>
+                  <text class="type-text">{{ message.typeText }}</text>
+                </view>
+                <text class="message-time">{{ formatTime(message.createTime) }}</text>
+              </view>
+
+              <!-- 消息标题 -->
+              <text class="message-title">{{ message.title }}</text>
+
+              <!-- 消息内容 -->
+              <text class="message-content">{{ message.content }}</text>
             </view>
-            <text class="message-time">{{ formatTime(message.createTime) }}</text>
           </view>
-
-          <!-- 消息标题 -->
-          <text class="message-title">{{ message.title }}</text>
-
-          <!-- 消息内容 -->
-          <text class="message-content">{{ message.content }}</text>
+          <view class="delete-btn" @click="confirmDelete(message, index)">
+            <text class="delete-btn-text">删除</text>
+          </view>
         </view>
       </view>
     </view>
@@ -85,17 +106,29 @@
 </template>
 
 <script>
-import { getMessageList, markMessageAsRead } from '@/common/api/message.uts'
+import { getMessageList, markMessageAsRead, markAllMessagesAsRead, deleteMessage } from '@/common/api/message.uts'
 import { getAnnouncementList } from '@/common/api/announcement.uts'
 import type { AnnouncementInfo } from '@/common/api/announcement.uts'
-import { refreshUnreadCount } from '@/store/message.uts'
+import { refreshUnreadCount, clearMessageUnread } from '@/store/message.uts'
+
+const DELETE_BTN_WIDTH = 70
 
 export default {
   data() {
     return {
       loading: true,
       messages: [] as any[],
-      announcements: [] as AnnouncementInfo[]
+      announcements: [] as AnnouncementInfo[],
+      startX: 0,
+      startY: 0,
+      currentIndex: -1
+    }
+  },
+  computed: {
+    hasUnread(): boolean {
+      const hasUnreadMessages = this.messages.some((m: any) => m.isRead === 0)
+      const hasUnreadAnnouncements = this.announcements.some((a: any) => a.isRead === 0)
+      return hasUnreadMessages || hasUnreadAnnouncements
     }
   },
   onLoad() {
@@ -112,10 +145,43 @@ export default {
       uni.navigateBack()
     },
 
+    async markAllAsRead() {
+      try {
+        await markAllMessagesAsRead()
+        this.messages.forEach((m: any) => {
+          m.isRead = 1
+        })
+        this.announcements.forEach((a: any) => {
+          a.isRead = 1
+        })
+        const key = 'read_announcement_ids'
+        const allIds = this.announcements.map((a: any) => a.id)
+        uni.setStorageSync(key, allIds)
+        clearMessageUnread()
+        refreshUnreadCount()
+        uni.showToast({
+          title: '已全部标记为已读',
+          icon: 'success'
+        })
+      } catch (error) {
+        console.error('一键已读失败:', error)
+        uni.showToast({
+          title: '操作失败，请重试',
+          icon: 'none'
+        })
+      }
+    },
+
     async loadMessages() {
       this.loading = true
       try {
-        this.messages = await getMessageList()
+        const list = await getMessageList()
+        this.messages = (list || []).map((item: any) => {
+          return {
+            ...item,
+            _translateX: 0
+          }
+        })
       } catch (error) {
         console.error('获取消息列表失败:', error)
         uni.showToast({
@@ -129,7 +195,6 @@ export default {
 
     async loadAnnouncements() {
       try {
-        // 不传 position：通知中心展示全部已发布公告；如需只展示个人中心公告，可传 position=2
         const res = await getAnnouncementList(undefined, 10)
         const key = 'read_announcement_ids'
         let readIds : any = []
@@ -169,7 +234,91 @@ export default {
       }
     },
 
+    onTouchStart(e: TouchEvent, index: number) {
+      if (e.touches.length > 0) {
+        this.startX = e.touches[0].clientX
+        this.startY = e.touches[0].clientY
+        if (this.currentIndex !== index && this.currentIndex >= 0) {
+          this.closeSwipe(this.currentIndex)
+        }
+        this.currentIndex = index
+      }
+    },
+
+    onTouchMove(e: TouchEvent, index: number) {
+      if (e.touches.length > 0) {
+        const moveX = e.touches[0].clientX - this.startX
+        const moveY = e.touches[0].clientY - this.startY
+        if (Math.abs(moveY) > Math.abs(moveX)) {
+          return
+        }
+        const item = this.messages[index]
+        let translateX = (item._translateX || 0) + moveX
+        if (translateX > 0) translateX = 0
+        if (translateX < -DELETE_BTN_WIDTH) translateX = -DELETE_BTN_WIDTH
+        item._translateX = translateX
+        this.startX = e.touches[0].clientX
+      }
+    },
+
+    onTouchEnd(e: TouchEvent, index: number) {
+      const item = this.messages[index]
+      const translateX = item._translateX || 0
+      if (translateX < -DELETE_BTN_WIDTH / 2) {
+        item._translateX = -DELETE_BTN_WIDTH
+      } else {
+        item._translateX = 0
+      }
+    },
+
+    closeSwipe(index: number) {
+      const item = this.messages[index]
+      if (item) {
+        item._translateX = 0
+      }
+    },
+
+    confirmDelete(message: any, index: number) {
+      uni.showModal({
+        title: '确认删除',
+        content: '确定删除这条消息吗？',
+        success: (res) => {
+          if (res.confirm) {
+            this.doDelete(message, index)
+          } else {
+            this.closeSwipe(index)
+          }
+        }
+      })
+    },
+
+    async doDelete(message: any, index: number) {
+      try {
+        await deleteMessage(message.id)
+        this.messages.splice(index, 1)
+        this.currentIndex = -1
+        refreshUnreadCount()
+        uni.showToast({
+          title: '删除成功',
+          icon: 'success'
+        })
+      } catch (error) {
+        console.error('删除消息失败:', error)
+        uni.showToast({
+          title: '删除失败，请重试',
+          icon: 'none'
+        })
+        this.closeSwipe(index)
+      }
+    },
+
     async handleMessageClick(message: any) {
+      const translateX = message._translateX || 0
+      if (translateX < 0) {
+        this.closeSwipe(this.messages.indexOf(message))
+        return
+      }
+
       if (message.isRead === 0) {
         try {
           await markMessageAsRead(message.id)
@@ -222,29 +371,24 @@ export default {
       const now = new Date()
       const diff = now.getTime() - time.getTime()
 
-      // 1分钟内
       if (diff < 60000) {
         return '刚刚'
       }
 
-      // 1小时内
       if (diff < 3600000) {
         return Math.floor(diff / 60000) + '分钟前'
       }
 
-      // 今天
       if (time.toDateString() === now.toDateString()) {
         return time.getHours() + ':' + String(time.getMinutes()).padStart(2, '0')
       }
 
-      // 昨天
       const yesterday = new Date(now)
       yesterday.setDate(yesterday.getDate() - 1)
       if (time.toDateString() === yesterday.toDateString()) {
         return '昨天 ' + time.getHours() + ':' + String(time.getMinutes()).padStart(2, '0')
       }
 
-      // 其他
       return (time.getMonth() + 1) + '-' + time.getDate()
     }
   }
@@ -257,12 +401,12 @@ export default {
   background: #f5f5f5;
 }
 
-/* 导航栏 */
 .navbar {
   position: relative;
   display: flex;
   flex-direction: row;
   align-items: center;
+  justify-content: space-between;
   padding: 60rpx 30rpx 20rpx;
   background: linear-gradient(135deg, #2563eb 0%, #3b82f6 50%, #60a5fa 100%);
 }
@@ -292,11 +436,26 @@ export default {
   white-space: nowrap;
 }
 
-.placeholder {
-  width: 64rpx;
+.clear-btn {
+  padding: 12rpx 24rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120rpx;
 }
 
-/* 加载中 */
+.clear-btn-disabled {
+  opacity: 0.5;
+}
+
+.clear-btn-text {
+  font-size: 26rpx;
+  color: #ffffff;
+  font-weight: 500;
+}
+
 .loading-wrapper {
   padding: 200rpx 0;
   display: flex;
@@ -308,7 +467,6 @@ export default {
   color: #999999;
 }
 
-/* 空状态 */
 .empty-wrapper {
   padding: 200rpx 0;
   display: flex;
@@ -326,12 +484,10 @@ export default {
   color: #999999;
 }
 
-/* 内容区域：公告 + 消息 */
 .messages-content {
   padding: 20rpx 24rpx 30rpx;
 }
 
-/* 公告块 */
 .announcement-block {
   margin-bottom: 30rpx;
 }
@@ -462,14 +618,27 @@ export default {
   border: none;
 }
 
-/* 消息列表 */
 .messages-list {
   margin-top: 4rpx;
 }
 
-.message-card {
+.message-item-wrapper {
   position: relative;
   margin-bottom: 20rpx;
+  overflow: hidden;
+  border-radius: 15rpx;
+}
+
+.message-item-swipe {
+  position: relative;
+  z-index: 2;
+  background: #ffffff;
+  border-radius: 15rpx;
+  transition: transform 0.1s ease;
+}
+
+.message-card {
+  position: relative;
   padding: 30rpx;
   background: #ffffff;
   border-radius: 15rpx;
@@ -478,6 +647,25 @@ export default {
 
 .message-card.unread {
   background: #f0f9ff;
+}
+
+.delete-btn {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 140rpx;
+  background: #ef4444;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 15rpx 15rpx 0;
+}
+
+.delete-btn-text {
+  font-size: 28rpx;
+  color: #ffffff;
+  font-weight: 500;
 }
 
 .unread-badge {
@@ -490,7 +678,6 @@ export default {
   border-radius: 50%;
 }
 
-/* 消息头部 */
 .message-header {
   display: flex;
   justify-content: space-between;
@@ -544,7 +731,6 @@ export default {
   color: #999999;
 }
 
-/* 消息标题 */
 .message-title {
   display: block;
   font-size: 30rpx;
@@ -553,7 +739,6 @@ export default {
   margin-bottom: 15rpx;
 }
 
-/* 消息内容 */
 .message-content {
   display: block;
   font-size: 26rpx;

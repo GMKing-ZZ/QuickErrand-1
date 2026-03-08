@@ -168,6 +168,12 @@
 					"style": {
 						"navigationBarTitleText": "订单聊天"
 					}
+				},
+				{
+					"path": "blacklist",
+					"style": {
+						"navigationBarTitleText": "被拉黑跑腿员"
+					}
 				}
 			]
 		},

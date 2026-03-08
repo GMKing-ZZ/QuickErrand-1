@@ -107,10 +107,21 @@
           <text class="remark-text">{{ order.remark }}</text>
         </view>
 
+        <!-- 拉黑提示 -->
+        <view v-if="currentStatusKey() === 'pending' && order.blacklisted" class="blacklist-tip">
+          <text class="blacklist-tip-icon">⚠️</text>
+          <text class="blacklist-tip-text">您已被该用户拉黑，无法接此订单</text>
+        </view>
+
         <!-- 操作按钮（可接单列表） -->
         <view v-if="currentStatusKey() === 'pending'" class="action-section">
-          <button class="accept-btn" @click.stop="handleAcceptOrder(order)">
-            <text class="btn-text">立即接单</text>
+          <button 
+            class="accept-btn" 
+            :class="{ 'disabled-btn': order.blacklisted }"
+            :disabled="order.blacklisted"
+            @click.stop="handleAcceptOrder(order)"
+          >
+            <text class="btn-text">{{ order.blacklisted ? '无法接单' : '立即接单' }}</text>
           </button>
         </view>
 
@@ -337,7 +348,15 @@ export default {
     },
 
     async handleAcceptOrder(order: any) {
-      // 检查认证状态
+      if (order.blacklisted) {
+        uni.showToast({
+          title: '您已被该用户拉黑，无法接此订单',
+          icon: 'none',
+          duration: 2500
+        })
+        return
+      }
+
       if (!this.authInfo) {
         uni.showModal({
           title: '提示',
@@ -416,12 +435,7 @@ export default {
               this.loadOrders()
             } catch (error) {
               console.error('接单失败:', error)
-              // 如果接单失败，可能是认证状态已变更，重新加载认证信息
               this.loadAuthInfo()
-              uni.showToast({
-                title: '接单失败，请重试',
-                icon: 'none'
-              })
             }
           }
         }
@@ -982,6 +996,29 @@ export default {
   word-break: break-all;
 }
 
+/* 拉黑提示 */
+.blacklist-tip {
+  margin-top: 16rpx;
+  padding: 16rpx;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(248, 113, 113, 0.05) 100%);
+  border-radius: 12rpx;
+  border: 1rpx solid rgba(239, 68, 68, 0.2);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.blacklist-tip-icon {
+  font-size: 28rpx;
+}
+
+.blacklist-tip-text {
+  font-size: 26rpx;
+  color: #dc2626;
+  font-weight: 500;
+}
+
 /* 操作按钮 */
 .action-section {
   margin-top: 20rpx;
@@ -1005,6 +1042,15 @@ export default {
 .accept-btn:active {
   transform: scale(0.95);
   box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.3);
+}
+
+.accept-btn.disabled-btn {
+  background: linear-gradient(135deg, #9ca3af 0%, #d1d5db 60%, #e5e7eb 100%);
+  box-shadow: none;
+}
+
+.accept-btn.disabled-btn:active {
+  transform: none;
 }
 
 .btn-text {

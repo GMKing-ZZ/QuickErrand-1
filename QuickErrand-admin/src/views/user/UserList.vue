@@ -94,9 +94,15 @@
           </template>
         </el-table-column>
         <el-table-column prop="createTime" label="注册时间" width="180" sortable align="center" />
-        <el-table-column label="操作" width="200" align="center">
+        <el-table-column label="操作" width="240" align="center">
           <template #default="{ row }">
             <div class="action-buttons">
+              <el-button
+                type="text"
+                @click="handleViewDetail(row)"
+              >
+                查看
+              </el-button>
               <el-button
                 v-if="row.status === 1 && row.userType !== 3"
                 type="text"
@@ -119,7 +125,7 @@
               >
                 删除
               </el-button>
-              <span v-if="row.userType === 3" style="color: var(--qe-text-disabled); font-size: 14px;">--</span>
+              <span v-if="row.userType === 3 && row.status !== 1 && row.status !== 0" style="color: var(--qe-text-disabled); font-size: 14px;">--</span>
             </div>
           </template>
         </el-table-column>
@@ -282,14 +288,140 @@
         </div>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="detailDialogVisible"
+      title="用户详情"
+      width="800px"
+      class="detail-dialog"
+    >
+      <div v-if="detailLoading" class="detail-loading">
+        <el-icon class="is-loading"><Loading /></el-icon>
+        <span>加载中...</span>
+      </div>
+      <div v-else-if="userDetail" class="user-detail">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="头像">
+            <el-avatar :size="50" :src="userDetail.avatar || DEFAULT_AVATAR" />
+          </el-descriptions-item>
+          <el-descriptions-item label="用户名">
+            {{ userDetail.username || '--' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="昵称">
+            {{ userDetail.nickname || '--' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="手机号">
+            {{ userDetail.phone || '--' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="性别">
+            {{ userDetail.genderText }}
+          </el-descriptions-item>
+          <el-descriptions-item label="生日">
+            {{ userDetail.birthday || '--' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="用户类型">
+            <el-tag :type="getUserTypeTagType(userDetail.userType)" size="small">
+              {{ userDetail.userTypeText }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <span class="status-tag">
+              <span :class="['status-dot', userDetail.status === 1 ? 'running' : 'closed']"></span>
+              {{ userDetail.statusText }}
+            </span>
+          </el-descriptions-item>
+          <el-descriptions-item label="微信OpenID">
+            <span class="openid-text">{{ userDetail.openid || '--' }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="注册时间">
+            {{ userDetail.createTime }}
+          </el-descriptions-item>
+          <el-descriptions-item label="更新时间">
+            {{ userDetail.updateTime }}
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <div v-if="userDetail.runnerInfo" class="runner-info-section">
+          <div class="section-title">跑腿员信息</div>
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="真实姓名">
+              {{ userDetail.runnerInfo.realName || '--' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="身份证号">
+              {{ maskIdCard(userDetail.runnerInfo.idCard) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="认证状态">
+              <el-tag :type="getCertStatusTagType(userDetail.runnerInfo.certStatus)" size="small">
+                {{ userDetail.runnerInfo.certStatusText }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="信用等级">
+              <el-rate v-model="userDetail.runnerInfo.creditLevel" disabled :max="5" />
+            </el-descriptions-item>
+            <el-descriptions-item label="完成订单数">
+              {{ userDetail.runnerInfo.totalOrders || 0 }} 单
+            </el-descriptions-item>
+            <el-descriptions-item label="好评率">
+              <span class="good-rate">{{ formatGoodRate(userDetail.runnerInfo.goodRate) }}</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="服务时间">
+              {{ userDetail.runnerInfo.serviceTime || '--' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="服务范围">
+              {{ formatServiceRange(userDetail.runnerInfo.serviceRange) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="驳回原因" :span="2" v-if="userDetail.runnerInfo.rejectReason">
+              <span class="reject-reason">{{ userDetail.runnerInfo.rejectReason }}</span>
+            </el-descriptions-item>
+          </el-descriptions>
+          <div v-if="userDetail.runnerInfo.idCardFront" class="id-card-section">
+            <div class="section-title">身份证照片</div>
+            <div class="id-card-images">
+              <el-image
+                :src="userDetail.runnerInfo.idCardFront"
+                :preview-src-list="[userDetail.runnerInfo.idCardFront, userDetail.runnerInfo.idCardBack].filter(Boolean)"
+                fit="cover"
+                class="id-card-img"
+              >
+                <template #error>
+                  <div class="image-error">
+                    <el-icon><Picture /></el-icon>
+                    <span>加载失败</span>
+                  </div>
+                </template>
+              </el-image>
+              <el-image
+                v-if="userDetail.runnerInfo.idCardBack"
+                :src="userDetail.runnerInfo.idCardBack"
+                :preview-src-list="[userDetail.runnerInfo.idCardFront, userDetail.runnerInfo.idCardBack].filter(Boolean)"
+                fit="cover"
+                class="id-card-img"
+              >
+                <template #error>
+                  <div class="image-error">
+                    <el-icon><Picture /></el-icon>
+                    <span>加载失败</span>
+                  </div>
+                </template>
+              </el-image>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="detailDialogVisible = false">关闭</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Setting, User } from '@element-plus/icons-vue'
-import { getUserList, updateUserStatus, createUser, deleteUser, batchDeleteUsers } from '@/api/user'
+import { Plus, Setting, User, Loading, Picture } from '@element-plus/icons-vue'
+import { getUserList, getUserDetail, updateUserStatus, createUser, deleteUser, batchDeleteUsers } from '@/api/user'
 import { uploadFile } from '@/api/file'
 import PageHeader from '@/components/PageHeader.vue'
 
@@ -300,6 +432,9 @@ const dialogVisible = ref(false)
 const dialogTitle = ref('新建用户')
 const formRef = ref(null)
 const totalCount = ref(0)
+const detailDialogVisible = ref(false)
+const detailLoading = ref(false)
+const userDetail = ref(null)
 
 // 默认头像URL
 const DEFAULT_AVATAR = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'
@@ -548,6 +683,56 @@ const handleAdd = () => {
   form.userType = 1
   form.status = 1
   dialogVisible.value = true
+}
+
+const handleViewDetail = async (row) => {
+  detailLoading.value = true
+  detailDialogVisible.value = true
+  userDetail.value = null
+  try {
+    const res = await getUserDetail(row.id)
+    userDetail.value = res.data
+  } catch (error) {
+    console.error('获取用户详情失败:', error)
+    ElMessage.error('获取用户详情失败')
+    detailDialogVisible.value = false
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+const maskIdCard = (idCard) => {
+  if (!idCard) return '--'
+  if (idCard.length < 8) return idCard
+  return idCard.substring(0, 4) + '**********' + idCard.substring(idCard.length - 4)
+}
+
+const getCertStatusTagType = (certStatus) => {
+  switch (certStatus) {
+    case 0:
+      return 'info'
+    case 1:
+      return 'warning'
+    case 2:
+      return 'success'
+    case 3:
+      return 'danger'
+    default:
+      return ''
+  }
+}
+
+const formatGoodRate = (goodRate) => {
+  if (goodRate === null || goodRate === undefined) return '--'
+  const rate = Number(goodRate)
+  if (isNaN(rate)) return '--'
+  return rate.toFixed(1) + '%'
+}
+
+const formatServiceRange = (serviceRange) => {
+  if (!serviceRange) return '--'
+  const km = serviceRange / 1000
+  return km + ' 公里'
 }
 
 
@@ -821,5 +1006,109 @@ const handleBatchDelete = () => {
 .batch-delete-btn:hover {
   box-shadow: 0 6px 20px rgba(239, 68, 68, 0.35) !important;
   transform: translateY(-1px);
+}
+
+.user-detail {
+  padding: 20px 0;
+}
+
+.detail-dialog :deep(.el-dialog) {
+  border-radius: var(--qe-radius-xl);
+  box-shadow: var(--qe-shadow-modal);
+}
+
+.detail-dialog :deep(.el-dialog__header) {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--qe-border-lighter);
+  background: var(--qe-surface);
+}
+
+.detail-dialog :deep(.el-dialog__body) {
+  padding: 24px;
+  background: var(--qe-bg);
+}
+
+.detail-dialog :deep(.el-dialog__footer) {
+  padding: 16px 24px;
+  border-top: 1px solid var(--qe-border-lighter);
+  background: var(--qe-surface);
+}
+
+.detail-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 0;
+  color: var(--qe-text-muted);
+  gap: 12px;
+}
+
+.detail-loading .el-icon {
+  font-size: 32px;
+  color: var(--qe-primary);
+}
+
+.runner-info-section {
+  margin-top: 24px;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--qe-text);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--qe-border-lighter);
+}
+
+.good-rate {
+  color: var(--qe-success);
+  font-weight: 500;
+}
+
+.reject-reason {
+  color: var(--qe-danger);
+}
+
+.openid-text {
+  font-size: 12px;
+  word-break: break-all;
+  color: var(--qe-text-muted);
+}
+
+.id-card-section {
+  margin-top: 16px;
+}
+
+.id-card-images {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.id-card-img {
+  width: 200px;
+  height: 126px;
+  border-radius: var(--qe-radius-md);
+  border: 1px solid var(--qe-border-lighter);
+  cursor: pointer;
+}
+
+.image-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  background: var(--qe-bg);
+  color: var(--qe-text-muted);
+  font-size: 12px;
+}
+
+.image-error .el-icon {
+  font-size: 24px;
+  margin-bottom: 4px;
 }
 </style>

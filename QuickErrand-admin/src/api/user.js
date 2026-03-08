@@ -12,6 +12,16 @@ export function getUserList(params) {
 }
 
 /**
+ * 获取用户详情
+ */
+export function getUserDetail(userId) {
+  return request({
+    url: `/admin/user/detail/${userId}`,
+    method: 'get'
+  })
+}
+
+/**
  * 更新用户状态
  */
 export function updateUserStatus(userId, status) {

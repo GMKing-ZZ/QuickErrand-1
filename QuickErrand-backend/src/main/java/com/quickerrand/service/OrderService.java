@@ -10,6 +10,7 @@ import com.quickerrand.vo.OrderListVO;
 import com.quickerrand.vo.OrderVO;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * 订单Service接口
@@ -95,13 +96,6 @@ public interface OrderService extends IService<Order> {
      * @param evaluateOrderDTO 评价信息
      */
     void evaluateOrder(Long userId, com.quickerrand.dto.EvaluateOrderDTO evaluateOrderDTO);
-
-    /**
-     * 获取待接单列表
-     *
-     * @return 待接单订单列表
-     */
-    java.util.List<OrderVO> getPendingOrders();
 
     /**
      * 跑腿员接单
@@ -191,5 +185,13 @@ public interface OrderService extends IService<Order> {
      * @param orderIds 订单ID列表
      */
     void batchDeleteOrders(java.util.List<Long> orderIds);
+
+    /**
+     * 获取待接单订单列表（带拉黑状态）
+     *
+     * @param runnerId 跑腿员ID
+     * @return 待接单订单列表
+     */
+    List<OrderVO> getPendingOrders(Long runnerId);
 
 }

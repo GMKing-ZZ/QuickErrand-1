@@ -5,6 +5,7 @@ import com.quickerrand.common.Result;
 import com.quickerrand.dto.CreateUserDTO;
 import com.quickerrand.dto.UserQueryDTO;
 import com.quickerrand.service.UserService;
+import com.quickerrand.vo.UserDetailVO;
 import com.quickerrand.vo.UserListVO;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -35,6 +36,13 @@ public class AdminUserController {
     public Result<Page<UserListVO>> getUserList(UserQueryDTO queryDTO) {
         Page<UserListVO> page = userService.getUserList(queryDTO);
         return Result.success(page);
+    }
+
+    @ApiOperation("获取用户详情")
+    @GetMapping("/detail/{userId}")
+    public Result<UserDetailVO> getUserDetail(@PathVariable Long userId) {
+        UserDetailVO detail = userService.getUserDetail(userId);
+        return Result.success(detail);
     }
 
     @ApiOperation("更新用户状态")

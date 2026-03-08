@@ -59,6 +59,8 @@ export type OrderInfo = {
   attitudeScore ?: number
   evaluationContent ?: string
   evaluationImages ?: string
+  // 拉黑状态（跑腿员端使用）
+  blacklisted ?: boolean
 }
 
 /**

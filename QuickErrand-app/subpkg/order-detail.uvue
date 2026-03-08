@@ -305,12 +305,19 @@
       </template>
       <!-- 跑腿员的按钮：立即接单 / 确认收货 -->
       <template v-else>
+        <!-- 拉黑提示 -->
+        <view v-if="orderInfo.status === 2 && orderInfo.blacklisted" class="blacklist-tip">
+          <text class="blacklist-tip-icon">⚠️</text>
+          <text class="blacklist-tip-text">您已被该用户拉黑，无法接此订单</text>
+        </view>
         <button
           v-if="orderInfo.status === 2"
           class="action-btn accept-btn"
+          :class="{ 'disabled-btn': orderInfo.blacklisted }"
+          :disabled="orderInfo.blacklisted"
           @click="handleAcceptOrder"
         >
-          <text class="btn-text">立即接单</text>
+          <text class="btn-text">{{ orderInfo.blacklisted ? '无法接单' : '立即接单' }}</text>
         </button>
         <button
           v-if="orderInfo.status === 3 && isOrderRunner"
@@ -715,6 +722,16 @@ export default {
     },
 
     async handleAcceptOrder() {
+      // 检查是否被拉黑
+      if (this.orderInfo.blacklisted) {
+        uni.showToast({
+          title: '您已被该用户拉黑，无法接此订单',
+          icon: 'none',
+          duration: 2500
+        })
+        return
+      }
+
       // 检查跑腿员认证状态
       try {
         const authInfo = await getRunnerAuthInfo()
@@ -1450,10 +1467,31 @@ export default {
   background: var(--list-background-color, #ffffff);
   box-shadow: 0 -4rpx 12rpx rgba(0, 0, 0, 0.05);
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16rpx;
+}
+
+.blacklist-tip {
+  display: flex;
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
-  column-gap: 20rpx;
+  justify-content: center;
+  padding: 16rpx 20rpx;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(248, 113, 113, 0.05) 100%);
+  border-radius: 12rpx;
+  border: 1rpx solid rgba(239, 68, 68, 0.2);
+  gap: 10rpx;
+}
+
+.blacklist-tip-icon {
+  font-size: 28rpx;
+}
+
+.blacklist-tip-text {
+  font-size: 26rpx;
+  color: #dc2626;
+  font-weight: 500;
 }
 
 .action-btn {
@@ -1493,6 +1531,11 @@ export default {
 
 .accept-btn .btn-text {
   color: #ffffff;
+}
+
+.accept-btn.disabled-btn {
+  background: linear-gradient(135deg, #9ca3af 0%, #d1d5db 60%, #e5e7eb 100%);
+  box-shadow: none;
 }
 
 .confirm-receive-btn {

@@ -12,18 +12,22 @@ import com.quickerrand.dto.ResetPasswordDTO;
 import com.quickerrand.dto.UpdateUserInfoDTO;
 import com.quickerrand.dto.UserQueryDTO;
 import com.quickerrand.dto.WxLoginDTO;
+import com.quickerrand.entity.RunnerInfo;
 import com.quickerrand.entity.User;
 import com.quickerrand.exception.BusinessException;
 import com.quickerrand.mapper.AddressMapper;
 import com.quickerrand.mapper.UserMapper;
 import com.quickerrand.service.SmsService;
 import com.quickerrand.service.UserService;
+import com.quickerrand.service.RunnerInfoService;
 import com.quickerrand.utils.JwtUtils;
 import com.quickerrand.vo.LoginVO;
+import com.quickerrand.vo.UserDetailVO;
 import com.quickerrand.vo.UserListVO;
 import com.quickerrand.vo.UserVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,6 +58,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
     @Autowired
     private AddressMapper addressMapper;
+
+    @Lazy
+    @Autowired
+    private RunnerInfoService runnerInfoService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -651,6 +659,76 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         updateById(user);
 
         log.info("用户重置密码成功，手机号：{}", resetPasswordDTO.getPhone());
+    }
+
+    @Override
+    public UserDetailVO getUserDetail(Long userId) {
+        User user = getById(userId);
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+
+        UserDetailVO vo = new UserDetailVO();
+        BeanUtil.copyProperties(user, vo);
+
+        switch (user.getUserType()) {
+            case 1:
+                vo.setUserTypeText("普通用户");
+                break;
+            case 2:
+                vo.setUserTypeText("跑腿员");
+                break;
+            case 3:
+                vo.setUserTypeText("管理员");
+                break;
+        }
+
+        vo.setStatusText(user.getStatus() == 1 ? "正常" : "禁用");
+
+        switch (user.getGender()) {
+            case 1:
+                vo.setGenderText("男");
+                break;
+            case 2:
+                vo.setGenderText("女");
+                break;
+            default:
+                vo.setGenderText("未知");
+        }
+
+        if (user.getBirthday() != null) {
+            vo.setBirthday(user.getBirthday().toString());
+        }
+
+        if (user.getUserType() == 2) {
+            RunnerInfo runnerInfo = runnerInfoService.getOne(
+                new LambdaQueryWrapper<RunnerInfo>().eq(RunnerInfo::getUserId, userId)
+            );
+            if (runnerInfo != null) {
+                UserDetailVO.RunnerInfoVO runnerVO = new UserDetailVO.RunnerInfoVO();
+                BeanUtil.copyProperties(runnerInfo, runnerVO);
+                
+                switch (runnerInfo.getCertStatus()) {
+                    case 0:
+                        runnerVO.setCertStatusText("未认证");
+                        break;
+                    case 1:
+                        runnerVO.setCertStatusText("审核中");
+                        break;
+                    case 2:
+                        runnerVO.setCertStatusText("已认证");
+                        break;
+                    case 3:
+                        runnerVO.setCertStatusText("已驳回");
+                        break;
+                }
+                
+                runnerVO.setCertTime(runnerInfo.getCreateTime());
+                vo.setRunnerInfo(runnerVO);
+            }
+        }
+
+        return vo;
     }
 
 }

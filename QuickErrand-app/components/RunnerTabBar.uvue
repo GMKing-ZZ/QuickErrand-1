@@ -23,8 +23,12 @@
     >
       <view class="tab-icon-wrapper">
         <text class="tab-icon">💬</text>
-        <view v-if="hasUnread" class="tab-badge">
-          <text class="tab-badge-text">{{ unreadText }}</text>
+        <view 
+          v-if="hasUnread" 
+          class="tab-badge"
+          :class="{ 'badge-dot': isDotMode }"
+        >
+          <text v-if="!isDotMode" class="tab-badge-text">{{ unreadText }}</text>
         </view>
       </view>
       <text class="tab-text">消息</text>
@@ -55,9 +59,13 @@ export default {
     hasUnread(): boolean {
       return messageState.totalUnread > 0
     },
+    isDotMode(): boolean {
+      return messageState.totalUnread === 1
+    },
     unreadText(): string {
       const total = messageState.totalUnread
       if (total > 99) return '99+'
+      if (total === 1) return ''
       return String(total)
     }
   },
@@ -110,6 +118,7 @@ export default {
   border-top: 1rpx solid #e5e7eb;
   z-index: 999;
   box-sizing: border-box;
+  overflow: visible;
 }
 
 .tab-item {
@@ -120,6 +129,7 @@ export default {
   justify-content: center;
   color: #6b7280;
   font-size: 22rpx;
+  overflow: visible;
 }
 
 .tab-icon {
@@ -144,26 +154,55 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: visible;
 }
 
 .tab-badge {
   position: absolute;
-  top: -8rpx;
-  right: -20rpx;
-  min-width: 28rpx;
-  height: 28rpx;
-  padding: 0 8rpx;
-  border-radius: 14rpx;
-  background: #ef4444;
+  top: -4rpx;
+  right: -16rpx;
+  min-width: 32rpx;
+  height: 32rpx;
+  padding: 0 10rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 2rpx 8rpx rgba(239, 68, 68, 0.4);
+  animation: badge-pop 0.3s ease-out;
+  z-index: 10;
+}
+
+.tab-badge.badge-dot {
+  min-width: 16rpx;
+  width: 16rpx;
+  height: 16rpx;
+  padding: 0;
+  border-radius: 8rpx;
+  top: -2rpx;
+  right: -10rpx;
 }
 
 .tab-badge-text {
   font-size: 20rpx;
   color: #ffffff;
-  font-weight: 500;
+  font-weight: 600;
+  line-height: 1;
+}
+
+@keyframes badge-pop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 </style>
 

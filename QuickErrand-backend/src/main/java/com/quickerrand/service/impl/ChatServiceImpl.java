@@ -7,6 +7,8 @@ import com.quickerrand.entity.ChatOrderRel;
 import com.quickerrand.entity.Order;
 import com.quickerrand.entity.User;
 import com.quickerrand.exception.BusinessException;
+import com.quickerrand.entity.ChatDeleteRecord;
+import com.quickerrand.mapper.ChatDeleteRecordMapper;
 import com.quickerrand.mapper.ChatMessageMapper;
 import com.quickerrand.mapper.ChatOrderRelMapper;
 import com.quickerrand.mapper.OrderMapper;
@@ -46,6 +48,9 @@ public class ChatServiceImpl implements ChatService {
 
     @Autowired
     private ChatMessageMapper chatMessageMapper;
+
+    @Autowired
+    private ChatDeleteRecordMapper chatDeleteRecordMapper;
 
     @Autowired
     private OrderMapper orderMapper;
@@ -315,11 +320,18 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     public List<ChatMessageVO> getOrderMessages(Long currentUserId, Long orderId, Long lastMessageId, Integer pageSize) {
-        ensureChatSession(currentUserId, orderId);
+        ChatOrderRel rel = ensureChatSession(currentUserId, orderId);
         int size = (pageSize == null || pageSize <= 0) ? DEFAULT_PAGE_SIZE : pageSize;
+
+        Long contactId = rel.getUserId().equals(currentUserId) ? rel.getRunnerId() : rel.getUserId();
+        Long deleteTime = chatMessageMapper.getOrderDeleteTime(currentUserId, contactId, orderId);
+        if (deleteTime == null) {
+            deleteTime = 0L;
+        }
 
         LambdaQueryWrapper<ChatMessage> wrapper = new LambdaQueryWrapper<ChatMessage>()
                 .eq(ChatMessage::getOrderId, orderId)
+                .gt(ChatMessage::getSendTime, deleteTime)
                 .orderByAsc(ChatMessage::getSendTime);
         if (lastMessageId != null) {
             wrapper.lt(ChatMessage::getId, lastMessageId);
@@ -331,12 +343,12 @@ public class ChatServiceImpl implements ChatService {
             return new ArrayList<>();
         }
 
-        // 将当前用户作为接收方的未读消息标记为已读
         chatMessageMapper.update(null,
                 new LambdaUpdateWrapper<ChatMessage>()
                         .eq(ChatMessage::getOrderId, orderId)
                         .eq(ChatMessage::getToUserId, currentUserId)
                         .eq(ChatMessage::getReadStatus, 0)
+                        .gt(ChatMessage::getSendTime, deleteTime)
                         .set(ChatMessage::getReadStatus, 1)
                         .set(ChatMessage::getReadTime, System.currentTimeMillis())
         );
@@ -423,6 +435,29 @@ public class ChatServiceImpl implements ChatService {
                         .eq(ChatMessage::getToUserId, currentUserId)
                         .eq(ChatMessage::getReadStatus, 0)
         ).intValue();
+    }
+
+    @Override
+    public void deleteContact(Long currentUserId, Long contactId) {
+        long now = System.currentTimeMillis();
+        ChatDeleteRecord record = new ChatDeleteRecord();
+        record.setUserId(currentUserId);
+        record.setContactId(contactId);
+        record.setDeleteTime(now);
+        chatDeleteRecordMapper.insert(record);
+        log.info("用户{}删除联系人{}的聊天记录，时间戳: {}", currentUserId, contactId, now);
+    }
+
+    @Override
+    public void deleteOrderConversation(Long currentUserId, Long contactId, Long orderId) {
+        long now = System.currentTimeMillis();
+        ChatDeleteRecord record = new ChatDeleteRecord();
+        record.setUserId(currentUserId);
+        record.setContactId(contactId);
+        record.setOrderId(orderId);
+        record.setDeleteTime(now);
+        chatDeleteRecordMapper.insert(record);
+        log.info("用户{}删除联系人{}订单{}的聊天记录，时间戳: {}", currentUserId, contactId, orderId, now);
     }
 }
 

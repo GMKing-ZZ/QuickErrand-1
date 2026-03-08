@@ -194,4 +194,9 @@ public class OrderVO {
      */
     private String evaluationImages;
 
+    /**
+     * 当前跑腿员是否被下单用户拉黑
+     */
+    private Boolean blacklisted;
+
 }

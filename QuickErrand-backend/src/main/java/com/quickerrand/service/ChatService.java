@@ -100,5 +100,26 @@ public interface ChatService {
      * @return 聊天消息未读数
      */
     Integer getChatUnreadCount(Long currentUserId);
+
+    /**
+     * 删除与联系人的所有聊天记录
+     * 删除后，当前用户无法看到删除前的聊天记录
+     * 对方不受影响
+     *
+     * @param currentUserId 当前登录用户ID
+     * @param contactId     联系人ID
+     */
+    void deleteContact(Long currentUserId, Long contactId);
+
+    /**
+     * 删除与联系人在特定订单下的聊天记录
+     * 删除后，当前用户无法看到删除前的聊天记录
+     * 对方不受影响
+     *
+     * @param currentUserId 当前登录用户ID
+     * @param contactId     联系人ID
+     * @param orderId       订单ID
+     */
+    void deleteOrderConversation(Long currentUserId, Long contactId, Long orderId);
 }
 

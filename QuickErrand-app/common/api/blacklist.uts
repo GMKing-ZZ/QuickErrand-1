@@ -1,0 +1,48 @@
+/**
+ * 跑腿员黑名单相关API
+ */
+import { post, get, del } from '../utils/request.uts'
+
+/**
+ * 被拉黑跑腿员信息
+ */
+export type BlacklistedRunnerInfo = {
+  id : number
+  runnerId : number
+  runnerName : string
+  runnerAvatar : string | null
+  runnerPhone : string
+  creditLevel : number
+  totalOrders : number
+  goodRate : number
+  reason : string | null
+  createTime : string
+}
+
+/**
+ * 拉黑跑腿员
+ */
+export const addToBlacklist = (runnerId : number, reason ?: string) : Promise<any> => {
+  return post('/blacklist/add', { runnerId, reason })
+}
+
+/**
+ * 取消拉黑跑腿员
+ */
+export const removeFromBlacklist = (runnerId : number) : Promise<any> => {
+  return del(`/blacklist/remove/${runnerId}`)
+}
+
+/**
+ * 获取黑名单列表
+ */
+export const getBlacklist = () : Promise<BlacklistedRunnerInfo[]> => {
+  return get<BlacklistedRunnerInfo[]>('/blacklist/list')
+}
+
+/**
+ * 检查是否已拉黑
+ */
+export const checkBlacklisted = (runnerId : number) : Promise<boolean> => {
+  return get<boolean>(`/blacklist/check/${runnerId}`)
+}

@@ -85,6 +85,14 @@
           <text class="menu-arrow">›</text>
         </view>
 
+        <view class="menu-item" @click="goToBlacklist">
+          <view class="menu-icon-wrapper" style="background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);">
+            <text class="menu-icon iconfont icon-xiugaimima"></text>
+          </view>
+          <text class="menu-label">被拉黑跑腿员</text>
+          <text class="menu-arrow">›</text>
+        </view>
+
         <view class="menu-item" @click="togglePickupCodeEnabled">
           <view class="menu-icon-wrapper" style="background: linear-gradient(135deg, #8b5cf6 0%, #a78bfa 100%);">
             <text class="menu-icon iconfont icon-xiugaimima"></text>
@@ -199,6 +207,12 @@ export default {
     goToChangePassword() {
       uni.navigateTo({
         url: '/subpkg/change-password'
+      })
+    },
+
+    goToBlacklist() {
+      uni.navigateTo({
+        url: '/subpkg/blacklist'
       })
     },
 
