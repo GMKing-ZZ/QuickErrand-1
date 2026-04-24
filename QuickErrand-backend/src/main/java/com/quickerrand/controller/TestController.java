@@ -32,7 +32,7 @@ public class TestController {
 
     @ApiOperation("生成BCrypt密码")
     @GetMapping("/encode")
-    public Result<String> encodePassword(@RequestParam String password) {
+    public Result<String> encodePassword(@RequestParam("password") String password) {
         String encoded = passwordEncoder.encode(password);
         return Result.success(encoded);
     }

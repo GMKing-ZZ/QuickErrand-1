@@ -1,20 +1,4 @@
 # QuickErrand Backend
-
-<div align="center">
-
-![Version](https://img.shields.io/badge/版本-1.0.0-blue.svg)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.18-brightgreen.svg)
-![Java](https://img.shields.io/badge/Java-11+-orange.svg)
-![MySQL](https://img.shields.io/badge/MySQL-8.0-4479A1.svg)
-
-**基于 Spring Boot 的跑腿小程序后端服务**
-
-[功能特性](#功能特性) | [快速开始](#快速开始) | [API文档](#api接口) | [部署指南](#部署指南)
-
-</div>
-
----
-
 ## 📖 项目简介
 
 QuickErrand 后端服务是基于 Spring Boot 2.7.18 开发的 RESTful API 服务，为跑腿小程序提供完整的后端支持。项目采用前后端分离架构，提供用户管理、订单管理、跑腿员管理、实时聊天等核心功能，支持 JWT 认证、WebSocket 实时通讯、Redis 缓存等特性。
@@ -594,48 +578,6 @@ server {
     }
 }
 ```
-
-## 📝 开发规范
-
-### 代码规范
-
-- 遵循阿里巴巴 Java 开发手册
-- 使用 Lombok 简化代码
-- 统一使用 Result 类封装响应结果
-- 所有接口需要添加 Swagger 注解
-- 使用 @RestController 注解
-- 统一异常处理
-
-### 命名规范
-
-- 类名：大驼峰命名法（PascalCase）
-- 方法名：小驼峰命名法（camelCase）
-- 常量：全大写，下划线分隔
-- 包名：全小写
-
-### 接口规范
-
-- RESTful API 设计
-- 统一响应格式：
-```json
-{
-  "code": 200,
-  "message": "操作成功",
-  "data": {}
-}
-```
-- JWT 认证：`Authorization: Bearer <token>`
-
-### Git 提交规范
-
-- `feat`: 新功能
-- `fix`: 修复 Bug
-- `docs`: 文档更新
-- `style`: 代码格式调整
-- `refactor`: 代码重构
-- `test`: 测试相关
-- `chore`: 构建/工具变动
-
 ## 🐛 常见问题
 
 ### 1. 数据库连接失败
@@ -684,28 +626,8 @@ server {
 - 检查 Nginx 代理配置
 - 检查防火墙设置
 
-## 📚 相关文档
-
-- [Spring Boot 官方文档](https://spring.io/projects/spring-boot)
-- [MyBatis Plus 官方文档](https://baomidou.com/)
-- [Spring Security 官方文档](https://spring.io/projects/spring-security)
-- [Swagger 官方文档](https://swagger.io/)
-- [Redis 官方文档](https://redis.io/)
-
 ## 👥 作者
 
 **周政**
 
 指导教师：**吴换霞**（副教授）
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 详见 [LICENSE](../LICENSE) 文件
-
----
-
-<div align="center">
-
-**⭐ 如果这个项目对你有帮助，请给一个 Star ⭐**
-
-</div>

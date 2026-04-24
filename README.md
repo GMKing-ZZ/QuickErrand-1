@@ -1,19 +1,4 @@
 # QuickErrand - 跑腿小程序整体解决方案
-
-<div align="center">
-
-![Version](https://img.shields.io/badge/版本-1.9.8-blue.svg)
-![License](https://img.shields.io/badge/许可证-MIT-green.svg)
-![Platform](https://img.shields.io/badge/平台-微信小程序%20%7C%20App%20%7C%20H5-lightgrey.svg)
-
-**一个完整的跑腿服务平台，包含用户端、跑腿员端和管理后台**
-
-[在线演示](#) | [快速开始](#快速开始) | [功能特性](#功能特性) | [技术架构](#技术架构)
-
-</div>
-
----
-
 ## 📖 项目简介
 
 QuickErrand 是一个功能完善的跑腿小程序整体解决方案，采用前后端分离架构，实现了从用户下单、跑腿员接单到订单评价的完整业务闭环。项目包含三个独立子系统：
@@ -412,70 +397,8 @@ npm run build
 
 项目已支持腾讯云开发 CloudBase 部署，详见 [QuickErrand-app/DEPLOYMENT.md](./QuickErrand-app/DEPLOYMENT.md)
 
-## 📝 开发规范
-
-### 代码规范
-
-- **Java**: 遵循阿里巴巴 Java 开发手册
-- **前端**: 使用 ESLint + Prettier 统一格式
-- **Git 提交**: 使用约定式提交（Conventional Commits）
-
-### 提交规范
-
-- `feat`: 新功能
-- `fix`: 修复 Bug
-- `docs`: 文档更新
-- `style`: 代码格式调整
-- `refactor`: 代码重构
-- `test`: 测试相关
-- `chore`: 构建/工具变动
-
-### 接口规范
-
-- RESTful API 设计
-- 统一响应格式：`Result<T>`
-- JWT 认证：`Authorization: Bearer <token>`
-
-## 🤝 贡献指南
-
-欢迎提交 Issue 和 Pull Request！
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'feat: Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 提交 Pull Request
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
-
 ## 👥 作者
 
 **周政**
 
 指导教师：**吴换霞**（副教授）
-
-## 🙏 致谢
-
-感谢以下开源项目：
-
-- [uni-app x](https://uniapp.dcloud.net.cn/)
-- [Vue.js](https://vuejs.org/)
-- [Spring Boot](https://spring.io/projects/spring-boot)
-- [Element Plus](https://element-plus.org/)
-
-## 📞 联系方式
-
-如有问题或建议，欢迎通过以下方式联系：
-
-- 提交 Issue
-- 发送邮件
-
----
-
-<div align="center">
-
-**⭐ 如果这个项目对你有帮助，请给一个 Star ⭐**
-
-</div>

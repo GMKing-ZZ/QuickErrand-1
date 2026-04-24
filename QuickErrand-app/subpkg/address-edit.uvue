@@ -304,23 +304,10 @@ export default {
 
     // 调用高德地图逆地理编码API
     callAmapReverseGeocode(latitude: number, longitude: number) {
-      // 高德地图逆地理编码API
-      // 注意：需要在小程序管理后台配置request合法域名：https://restapi.amap.com
-      // 需要配置高德地图key
-      
-      uni.showLoading({
-        title: '正在解析地址...',
-        mask: true
-      })
-      
-      // 高德地图API需要经纬度顺序为：经度,纬度
       const location = `${longitude},${latitude}`
-      
-      // 从配置文件中获取高德地图key
       const key = MAP_CONFIG.amapKey
       
       if (!key) {
-        uni.hideLoading()
         uni.showToast({
           title: '请配置高德地图Key',
           icon: 'none',
@@ -329,6 +316,11 @@ export default {
         console.warn('高德地图Key未配置，请在manifest.json中配置web.sdkConfigs.maps.amap.key')
         return
       }
+      
+      uni.showLoading({
+        title: '正在解析地址...',
+        mask: true
+      })
       
       uni.request({
         url: 'https://restapi.amap.com/v3/geocode/regeo',
@@ -341,9 +333,9 @@ export default {
         },
         success: (res: any) => {
           console.log('高德地图逆地理编码结果:', res)
-          uni.hideLoading()
           
           if (res.data && res.data.status === '1' && res.data.regeocode) {
+            uni.hideLoading()
             const regeocode = res.data.regeocode
             this.parseAddressFromAmapGeocode(regeocode)
             uni.showToast({
@@ -352,23 +344,27 @@ export default {
               duration: 1500
             })
           } else {
-            // API调用失败
             console.warn('高德地图逆地理编码失败:', res.data)
-            uni.showToast({
-              title: res.data?.info || '地址解析失败，请手动填写',
-              icon: 'none',
-              duration: 2000
-            })
+            uni.hideLoading()
+            setTimeout(() => {
+              uni.showToast({
+                title: res.data?.info || '地址解析失败，请手动填写',
+                icon: 'none',
+                duration: 2000
+              })
+            }, 100)
           }
         },
         fail: (err) => {
           console.error('逆地理编码请求失败:', err)
           uni.hideLoading()
-          uni.showToast({
-            title: '网络错误，请检查网络',
-            icon: 'none',
-            duration: 2000
-          })
+          setTimeout(() => {
+            uni.showToast({
+              title: '网络错误，请检查网络',
+              icon: 'none',
+              duration: 2000
+            })
+          }, 100)
         }
       })
     },

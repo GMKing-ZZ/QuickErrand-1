@@ -239,10 +239,17 @@ export default {
       this.formData.idCardBack = ''
     },
 
-    // 验证身份证号
+    // 验证身份证号（支持15位和18位）
     validateIdCard(idCard: string): boolean {
-      const reg = /^[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]$/
-      return reg.test(idCard)
+      const trimmedIdCard = idCard.trim()
+      if (trimmedIdCard.length === 15) {
+        const reg15 = /^[1-9]\d{5}\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}$/
+        return reg15.test(trimmedIdCard)
+      } else if (trimmedIdCard.length === 18) {
+        const reg18 = /^[1-9]\d{5}(18|19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\d{3}[\dXx]$/
+        return reg18.test(trimmedIdCard)
+      }
+      return false
     },
 
     // 提交申请
@@ -269,7 +276,7 @@ export default {
 
       if (!this.validateIdCard(this.formData.idCard)) {
         uni.showToast({
-          title: '身份证号格式不正确',
+          title: '身份证号格式不正确，请输入15位或18位身份证号',
           icon: 'none'
         })
         return

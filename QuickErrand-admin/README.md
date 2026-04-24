@@ -1,20 +1,4 @@
 # QuickErrand 管理后台
-
-<div align="center">
-
-![Version](https://img.shields.io/badge/版本-1.0.0-blue.svg)
-![Vue](https://img.shields.io/badge/Vue-3.4.15-brightgreen.svg)
-![Element Plus](https://img.shields.io/badge/Element%20Plus-2.5.4-409EFF.svg)
-![Vite](https://img.shields.io/badge/Vite-5.0.11-646CFF.svg)
-
-**基于 Vue 3 + Element Plus 的跑腿小程序管理后台系统**
-
-[功能特性](#功能特性) | [快速开始](#快速开始) | [项目结构](#项目结构) | [部署指南](#部署指南)
-
-</div>
-
----
-
 ## 📖 项目简介
 
 QuickErrand 管理后台是基于 Vue 3 和 Element Plus 开发的现代化管理系统，为跑腿小程序提供完整的后台管理功能。系统采用响应式设计，支持数据可视化、富文本编辑等高级功能，帮助管理员高效管理平台运营。
@@ -525,61 +509,6 @@ export default defineConfig({
   }
 })
 ```
-
-## 🎨 设计规范
-
-### UI 设计
-
-- **组件库**：Element Plus
-- **布局方式**：Flex + Grid
-- **响应式设计**：适配多种屏幕尺寸
-- **主题色**：Element Plus 默认蓝色主题
-
-### 代码规范
-
-- 使用 Vue 3 Composition API
-- 使用 `<script setup>` 语法
-- 组件命名使用 PascalCase
-- 文件命名使用 kebab-case
-- 使用 ESLint + Prettier 统一格式
-
-### 目录规范
-
-- `api/` - API 接口定义
-- `views/` - 页面组件
-- `components/` - 公共组件
-- `utils/` - 工具函数
-- `store/` - 状态管理
-- `styles/` - 样式文件
-
-## 🌐 浏览器支持
-
-| 浏览器 | 版本 |
-|--------|------|
-| Chrome | >= 87 |
-| Firefox | >= 78 |
-| Safari | >= 14 |
-| Edge | >= 88 |
-
-## 📝 开发规范
-
-### Git 提交规范
-
-- `feat`: 新功能
-- `fix`: 修复 Bug
-- `docs`: 文档更新
-- `style`: 代码格式调整
-- `refactor`: 代码重构
-- `test`: 测试相关
-- `chore`: 构建/工具变动
-
-### 代码风格
-
-- 使用 2 空格缩进
-- 使用单引号
-- 语句末尾不加分号
-- 使用 ES6+ 语法
-
 ## 🐛 常见问题
 
 ### 1. 安装依赖失败
@@ -631,28 +560,8 @@ npm install --registry=https://registry.npmmirror.com
 - 检查样式优先级
 - 使用 scoped 样式
 
-## 📚 相关文档
-
-- [Vue 3 官方文档](https://vuejs.org/)
-- [Element Plus 官方文档](https://element-plus.org/)
-- [Vite 官方文档](https://vitejs.dev/)
-- [Pinia 官方文档](https://pinia.vuejs.org/)
-- [ECharts 官方文档](https://echarts.apache.org/)
-
 ## 👥 作者
 
 **周政**
 
 指导教师：**吴换霞**（副教授）
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 详见 [LICENSE](../LICENSE) 文件
-
----
-
-<div align="center">
-
-**⭐ 如果这个项目对你有帮助，请给一个 Star ⭐**
-
-</div>

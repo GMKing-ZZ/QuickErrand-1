@@ -19,7 +19,7 @@ public class QuickErrandApplication {
         String contextPath = env.getProperty("server.servlet.context-path", "");
         System.out.println("========================================");
         System.out.println("跑腿小程序后端服务启动成功！");
-        System.out.println("接口文档地址: http://localhost:" + port + contextPath + "/swagger-ui/");
+        System.out.println("接口文档地址: http://localhost:8088/api/swagger-ui/");
         System.out.println("========================================");
     }
 

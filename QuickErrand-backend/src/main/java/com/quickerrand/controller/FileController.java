@@ -1,7 +1,6 @@
 package com.quickerrand.controller;
 
 import com.quickerrand.common.Result;
-import com.quickerrand.utils.SecurityUtils;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;

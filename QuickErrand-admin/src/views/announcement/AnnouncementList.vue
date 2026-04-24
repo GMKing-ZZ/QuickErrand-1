@@ -93,7 +93,11 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" label="创建时间" sortable align="center" />
+        <el-table-column prop="createTime" label="创建时间" width="170" sortable align="center">
+          <template #default="{ row }">
+            <span class="nowrap">{{ row.createTime }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="220" fixed="right" align="center">
           <template #default="{ row }">
             <div class="action-buttons">
@@ -467,6 +471,10 @@ const handleBatchDelete = () => {
 </script>
 
 <style scoped>
+.nowrap {
+  white-space: nowrap;
+}
+
 .action-buttons {
   display: flex;
   justify-content: center;

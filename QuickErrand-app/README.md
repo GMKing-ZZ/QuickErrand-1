@@ -1,19 +1,4 @@
 # QuickErrand 小程序端
-
-<div align="center">
-
-![Version](https://img.shields.io/badge/版本-1.9.8-blue.svg)
-![Platform](https://img.shields.io/badge/平台-微信小程序%20%7C%20App%20%7C%20H5%20%7C%20鸿蒙-lightgrey.svg)
-![HBuilderX](https://img.shields.io/badge/HBuilderX-3.99+-green.svg)
-
-**基于 uni-app x 的多端跑腿小程序**
-
-[功能特性](#功能特性) | [快速开始](#快速开始) | [项目结构](#项目结构) | [部署指南](#部署指南)
-
-</div>
-
----
-
 ## 📖 项目简介
 
 QuickErrand 小程序端是基于 uni-app x 框架开发的多端应用，支持微信小程序、Android App、iOS App、H5 网页和鸿蒙应用等多个平台。项目采用 Vue 3 + UTS 开发，实现了用户端和跑腿员端双端功能，提供完整的跑腿服务体验。
@@ -585,64 +570,6 @@ const BASE_URL = 'http://localhost:8088/api'
 
 项目支持腾讯云开发 CloudBase 部署，详见 [DEPLOYMENT.md](./DEPLOYMENT.md)
 
-## 🎨 设计规范
-
-### 颜色方案
-
-- **主色调**：蓝色渐变 (#2563eb → #3b82f6 → #60a5fa)
-- **辅助色**：
-  - 绿色 (#10b981, #34d399) - 成功状态、收益
-  - 橙色 (#f97316, #fb923c) - 订单、警告
-- **背景色**：白色卡片 + 渐变背景
-
-### UI 特点
-
-- 卡片式设计
-- 圆角按钮（50rpx）
-- 渐变背景和按钮
-- 图标 + 文字组合
-- 清晰的信息层次
-- 状态标签颜色区分
-
-### 交互特点
-
-- 下拉刷新
-- 上拉加载更多
-- 状态标签区分
-- 操作按钮明确
-- 空状态提示
-- 加载状态提示
-
-## 📝 开发规范
-
-### 代码规范
-
-- 使用 Vue 3 Composition API
-- 使用 `<script setup>` 语法
-- 组件命名使用 PascalCase
-- 文件命名使用 kebab-case
-- 使用 UTS 进行原生开发
-
-### 目录规范
-
-- `pages/` - 主包页面
-- `subpkg/` - 分包页面
-- `components/` - 公共组件
-- `common/api/` - API 接口
-- `common/utils/` - 工具函数
-- `store/` - 状态管理
-- `static/` - 静态资源
-
-### Git 提交规范
-
-- `feat`: 新功能
-- `fix`: 修复 Bug
-- `docs`: 文档更新
-- `style`: 代码格式调整
-- `refactor`: 代码重构
-- `test`: 测试相关
-- `chore`: 构建/工具变动
-
 ## 🐛 常见问题
 
 ### 1. HBuilderX 版本过低
@@ -680,27 +607,8 @@ const BASE_URL = 'http://localhost:8088/api'
 - 确认商户号和密钥配置
 - 检查支付权限是否开通
 
-## 📚 相关文档
-
-- [uni-app x 官方文档](https://uniapp.dcloud.net.cn/)
-- [微信小程序开发文档](https://developers.weixin.qq.com/miniprogram/dev/framework/)
-- [高德地图开发文档](https://lbs.amap.com/api/javascript-api/summary)
-- [Vue 3 官方文档](https://vuejs.org/)
-
 ## 👥 作者
 
 **周政**
 
 指导教师：**吴换霞**（副教授）
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 详见 [LICENSE](../LICENSE) 文件
-
----
-
-<div align="center">
-
-**⭐ 如果这个项目对你有帮助，请给一个 Star ⭐**
-
-</div>
